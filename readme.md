@@ -1,5 +1,5 @@
 # **BrianRAG**
-## 项目开发者：Brian
+## 项目开发者：Brian（以下是作者本人，不接受反驳）
 ![rui.png](webui/assets/rui.png)
 
 https://img.shields.io/badge/python-3.10%252B-blue

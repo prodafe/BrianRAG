@@ -262,30 +262,7 @@ ENABLE_ENTITY_NORMALIZATION	True	实体自动合并
 
 
 🧱 项目结构
-text
-brianrag/
-├── core/
-│   ├── agents/               # 多模态智能体（LangGraph）
-│   ├── retriever.py          # 混合检索器 + 知识图谱集成
-│   ├── generator.py          # 本地 LLM 生成器 + 语义缓存
-│   ├── graph_builder.py      # 知识图谱构建与查询
-│   ├── reranker.py           # 重排序模型封装
-│   ├── self_correction.py    # 自我修正（评估+改写）
-│   └── query_optimizer.py    # 查询改写 + HyDE
-├── webui/
-│   ├── app.py                # Streamlit 主界面
-│   └── assets/               # 静态资源
-├── utils/
-│   ├── document_loader.py    # 多格式文档加载（含图片描述）
-│   ├── logger.py             # 统一日志
-│   └── timer.py              # 性能计时装饰器
-├── evaluation/
-│   ├── ragas_evaluator.py    # RAGAS 指标计算
-│   └── test_data.jsonl       # 标准测试集
-├── config.py                 # 配置文件
-├── requirements.txt          # Python 依赖
-├── tune_parameters.py        # 超参数自动调优脚本
-└── README.md
+![结构.png](webui/assets/%E7%BB%93%E6%9E%84.png)
 
 # ![1.png](webui/assets/1.png)
 

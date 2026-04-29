@@ -1,0 +1,37 @@
+# Core dependencies for TinyRAG
+streamlit>=1.28.0
+sentence-transformers>=2.2.2
+faiss-cpu>=1.7.4
+rank-bm25>=0.2.2
+langchain-community>=0.0.20
+langchain-core>=0.1.0
+pypdf>=3.17.0
+ollama>=0.1.6
+numpy>=1.24.0
+
+# Optional for graph and visualization
+networkx>=3.0
+pyvis>=0.3.2
+
+# For better text processing
+tiktoken>=0.5.0
+langchain-classic
+pandas
+camelot-py
+chardet
+langchain
+fitz
+python-docx
+jieba3k
+transformers
+torch
+langgraph
+config
+ragas
+sqlalchemy
+langchain-postgres
+splink
+celery
+fastapi
+pydantic
+booktype

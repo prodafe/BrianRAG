@@ -330,6 +330,8 @@ Streamlit – WebUI 框架
 
 📧 联系方式
 项目负责人：Brian
+QQ:2676038895
+WX:15371702638
 
 问题反馈：GitHub Issues
 

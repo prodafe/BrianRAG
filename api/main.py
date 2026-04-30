@@ -8,8 +8,10 @@ from tasks import celery_app, index_documents_task
 import os
 from config import Config
 import redis
+from fastapi.staticfiles import StaticFiles
 
 app = FastAPI(title="BrianRAG API", version="1.0.0")
+app.mount("/images", StaticFiles(directory="data/images"), name="images")
 
 # 允许跨域
 app.add_middleware(

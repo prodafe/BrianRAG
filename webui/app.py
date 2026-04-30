@@ -205,31 +205,70 @@ def check_and_refresh_documents():
         if resp.status_code == 200:
             remote_ts = resp.json().get("last_updated", 0)
             if remote_ts > st.session_state.last_updated:
-                # 版本更新，重新拉取文档列表
                 st.session_state.documents = fetch_documents()
                 st.session_state.last_updated = remote_ts
-                # 更新检索器的元数据（如果存在）
                 if hasattr(st.session_state, 'pipeline') and st.session_state.pipeline.retriever:
                     st.session_state.pipeline.retriever._load_doc_meta()
-                # 强制刷新页面
                 st.rerun()
     except Exception:
-        # 静默失败，不影响主流程
         pass
+
+def display_images(used_images):
+    """展示图片（缩略图，点击新窗口打开）"""
+    if not used_images:
+        return
+    st.markdown("**📷 相关图片**")
+    flat_images = []
+    seen = set()
+    for img_list in used_images:
+        for img in img_list:
+            if img and img not in seen:
+                seen.add(img)
+                flat_images.append(img)
+    if flat_images:
+        cols = st.columns(min(3, len(flat_images)))
+        for idx, img_path in enumerate(flat_images):
+            col = cols[idx % 3]
+            if os.path.exists(img_path):
+                col.markdown(
+                    f'<a href="file:///{os.path.abspath(img_path)}" target="_blank">'
+                    f'<img src="file:///{os.path.abspath(img_path)}" loading="lazy" style="width:100%; border-radius:5px;">'
+                    f'</a>',
+                    unsafe_allow_html=True)
+                col.caption(os.path.basename(img_path))
+            else:
+                col.caption(f"图片不存在: {img_path}")
+
+def display_reference_chunks(chunks, images_list=None):
+    """展示参考片段折叠面板"""
+    with st.expander("📖 参考片段"):
+        for i, chunk in enumerate(chunks):
+            st.text(f"片段 {i+1}:\n{chunk[:500]}...")
+            if images_list and i < len(images_list):
+                for img_path in images_list[i]:
+                    if os.path.exists(img_path):
+                        st.image(img_path, caption=os.path.basename(img_path), use_container_width=True)
+                    else:
+                        st.caption(f"图片不存在: {img_path}")
+
+def display_citations(citations):
+    """展示引用详情"""
+    if citations:
+        with st.expander("📌 引用详情"):
+            for ref_num, text in citations.items():
+                st.markdown(f"**[{ref_num}]** {text[:200]}...")
 
 def main():
     st.set_page_config(page_title="BrianRAG 知识库", layout="wide")
     st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
     st.title("📚 BrianRAG - 企业知识库问答系统")
 
-    # 自动检查文档更新（实现实时刷新）
     check_and_refresh_documents()
 
     if "pipeline" not in st.session_state:
         st.session_state.pipeline = RAGPipeline()
     if "messages" not in st.session_state:
         st.session_state.messages = []
-    # 初始化文档列表状态
     if "documents" not in st.session_state:
         st.session_state.documents = fetch_documents()
     if "indexing_task_id" not in st.session_state:
@@ -286,7 +325,6 @@ def main():
         if st.button("构建索引", disabled=(st.session_state.indexing_status == "running")):
             if uploaded_files:
                 try:
-                    # 上传文件
                     files = [("files", (file.name, file.getvalue())) for file in uploaded_files]
                     upload_resp = requests.post(f"{API_BASE_URL}/api/upload", files=files, timeout=30)
                     upload_resp.raise_for_status()
@@ -296,7 +334,6 @@ def main():
                     return
 
                 try:
-                    # 提交索引任务
                     index_resp = requests.post(f"{API_BASE_URL}/api/index",
                                                json={"file_paths": file_paths, "incremental": incremental},
                                                timeout=10)
@@ -311,7 +348,6 @@ def main():
             else:
                 st.warning("请先上传文件")
 
-        # 轮询任务状态
         if st.session_state.indexing_status == "running":
             task_id = st.session_state.indexing_task_id
             if task_id:
@@ -329,7 +365,6 @@ def main():
                     elif state == "SUCCESS":
                         num = data["result"].get("num_chunks", 0)
                         st.success(f"✅ 已索引 {num} 个文本块")
-                        # 刷新文档列表
                         st.session_state.documents = fetch_documents()
                         st.session_state.indexing_status = "done"
                         st.session_state.indexing_task_id = None
@@ -360,7 +395,6 @@ def main():
                     st.session_state.indexing_status = "idle"
                     st.rerun()
 
-        # 已索引文档列表（使用 session_state.documents）
         with st.expander("📄 已索引文档"):
             if st.session_state.documents:
                 doc_items = st.session_state.documents
@@ -417,7 +451,6 @@ def main():
     # 主区域标签页
     tab_q, tab_g = st.tabs(["💬 问答", "📊 知识图谱"])
 
-    # 问答页
     with tab_q:
         st.header("💬 提问")
         for msg_idx, msg in enumerate(st.session_state.messages):
@@ -427,7 +460,6 @@ def main():
                 if msg["role"] == "assistant":
                     question_text = st.session_state.messages[msg_idx - 1]["content"] if msg_idx > 0 else ""
                     cur_mode = st.session_state.get("query_mode", "快速模式 (RAG)")
-
                     col1, col2 = st.columns([1, 1])
                     with col1:
                         if st.button("👍 有用", key=f"up_{msg_idx}"):
@@ -437,7 +469,6 @@ def main():
                         if st.button("👎 无用", key=f"down_{msg_idx}"):
                             st.session_state.feedback_expanded[msg_idx] = not st.session_state.feedback_expanded.get(msg_idx, False)
                             st.rerun()
-
                     if st.session_state.feedback_expanded.get(msg_idx, False):
                         with st.container():
                             st.markdown("#### 📝 反馈详情")
@@ -461,35 +492,47 @@ def main():
             with st.spinner("思考中..."):
                 history = st.session_state.messages[-Config.MAX_HISTORY_TURNS * 2:]
                 st.session_state.query_mode = query_mode
+
                 if query_mode == "快速模式 (RAG)":
-                    result = pipeline.query(query, history=history)
-                elif query_mode == "智能体模式 (Agentic)":
-                    result = pipeline.agentic_query(query, history=history)
-                elif query_mode == "图谱工作流 (LangGraph)":
-                    result = pipeline.graph_query(query, history=history)
+                    # 流式生成
+                    stream_gen = pipeline.query_stream(query, history=history)
+                    with st.chat_message("assistant", avatar=ASSISTANT_AVATAR):
+                        answer = st.write_stream(stream_gen)
+                        # 获取元数据
+                        meta = st.session_state.get("last_rag_result", {})
+                        result = {
+                            "question": query,
+                            "answer": answer,
+                            "used_chunks": meta.get("used_chunks", []),
+                            "used_images": meta.get("used_images", []),
+                            "citations": meta.get("citations", {}),
+                            "graph_extra_indices": meta.get("graph_extra_indices", [])
+                        }
+                        # 保存助手消息到历史
+                        st.session_state.messages.append({"role": "assistant", "content": answer})
+                        # 展示图片和参考片段
+                        display_images(result.get("used_images", []))
+                        display_reference_chunks(result.get("used_chunks", []), result.get("used_images", []))
+                        display_citations(result.get("citations", {}))
+                    # 注意：不调用 st.rerun()，避免清空刚刚输出的内容
                 else:
-                    result = pipeline.agentic_multimodal_query(query, history=history)
+                    # 其他模式同步调用
+                    if query_mode == "智能体模式 (Agentic)":
+                        result = pipeline.agentic_query(query, history=history)
+                    elif query_mode == "图谱工作流 (LangGraph)":
+                        result = pipeline.graph_query(query, history=history)
+                    else:
+                        result = pipeline.agentic_multimodal_query(query, history=history)
 
-            with st.chat_message("assistant", avatar=ASSISTANT_AVATAR):
-                import re
-                answer_with_sup = re.sub(r'\[(\d+)\]', r'<sup>[\1]</sup>', result["answer"])
-                st.markdown(answer_with_sup, unsafe_allow_html=True)
-            st.session_state.messages.append({"role": "assistant", "content": result["answer"]})
-
-            with st.expander("📖 参考片段"):
-                for i, chunk in enumerate(result["used_chunks"]):
-                    st.text(f"片段 {i + 1}:\n{chunk[:500]}...")
-                    images = result.get("used_images", [])[i] if i < len(result.get("used_images", [])) else []
-                    for img_path in images:
-                        if os.path.exists(img_path):
-                            st.image(img_path, caption=os.path.basename(img_path), use_container_width=True)
-                        else:
-                            st.caption(f"图片不存在: {img_path}")
-            if result.get("citations"):
-                with st.expander("📌 引用详情"):
-                    for ref_num, text in result["citations"].items():
-                        st.markdown(f"**[{ref_num}]** {text[:200]}...")
-            st.rerun()
+                    with st.chat_message("assistant", avatar=ASSISTANT_AVATAR):
+                        import re
+                        answer_with_sup = re.sub(r'\[(\d+)\]', r'<sup>[\1]</sup>', result["answer"])
+                        st.markdown(answer_with_sup, unsafe_allow_html=True)
+                        st.session_state.messages.append({"role": "assistant", "content": result["answer"]})
+                        display_images(result.get("used_images", []))
+                        display_reference_chunks(result.get("used_chunks", []), result.get("used_images", []))
+                        display_citations(result.get("citations", {}))
+            # 所有模式结束后，不调用 st.rerun()，让页面自然更新
 
     # 知识图谱页
     with tab_g:

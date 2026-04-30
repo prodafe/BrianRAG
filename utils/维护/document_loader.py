@@ -207,6 +207,26 @@ def load_single_document(file_path: str):
                     metadata={"source": file_path, "image_path": img_path, "type": "image"}
                 ))
 
+        img_pattern = r'!\[.*?\]\((.*?)\)'
+        for match in re.finditer(img_pattern, content):
+            img_path = match.group(1)
+            if not os.path.isabs(img_path):
+                img_path = os.path.join(os.path.dirname(file_path), img_path)
+            start = max(0, match.start() - 200)
+            end = min(len(content), match.end() + 200)
+            context = content[start:end]
+            caption = generate_image_caption(img_path)  # 需实现（调用视觉模型）
+            img_text = f"图片上下文：{context}\n图片描述：{caption}"
+            docs.append(Document(
+                page_content=img_text,
+                metadata={
+                    "source": file_path,
+                    "image_path": img_path,
+                    "type": "image",
+                    "image_caption": caption
+                }
+            ))
+
     elif ext == ".csv":
         loader = CSVLoader(file_path)
         docs = loader.load()

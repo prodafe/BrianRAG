@@ -6,12 +6,15 @@
 [![License](https://img.shields.io/badge/License-Apache%202.0-green.svg)](https://www.apache.org/licenses/LICENSE-2.0)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688)](https://fastapi.tiangolo.com/)
 [![Ollama](https://img.shields.io/badge/Ollama-native-000000)](https://ollama.com/)
+[![CI](https://github.com/prodafe/BrianRAG/actions/workflows/ci.yml/badge.svg)](https://github.com/prodafe/BrianRAG/actions/workflows/ci.yml)
+[![Tests](https://img.shields.io/badge/tests-46%20passed-brightgreen)](https://github.com/prodafe/BrianRAG)
+[![Ruff](https://img.shields.io/badge/code%20style-ruff-000000)](https://github.com/astral-sh/ruff)
 
 <p align="center">
   <img src="frontend/Brian.png" alt="BrianRAG" width="180">
 </p>
 
-混合检索（BM25 + 向量 + 知识图谱 RRF）· 多模态理解 · ReAct Agent · 自我修正 · 预训练缓存 · GitHub 数据源 · RAGAS 评估回路。全部在本地运行，零云端依赖。
+混合检索（BM25 + 向量 + 知识图谱 RRF）· PDF 版式分析 · OCR 扫描件 · 多模态理解 · ReAct Agent · 工具调用 · 自我修正 · 多租户 RBAC · 预训练缓存 · 全部本地运行。
 
 ---
 
@@ -137,10 +140,24 @@ LLM_PROVIDER = "ollama"  # 或 "openai" / "anthropic"
 
 ### 文档解析
 
-- 按 `##`/`###` 章节智能切分
-- 语义分块（bge-m3 相似度检测话题边界）
-- 碎片合并（<50 字符自动合并至相邻 chunk）
-- 支持格式：`.pdf` `.md` `.txt` `.docx` `.html` `.csv` `.png` `.jpg` `.zip`
+- **PDF 版式分析器**：多栏检测、阅读顺序排序、表格结构保留、标题层级识别、图片提取
+- **OCR 双引擎**：PaddleOCR + Tesseract，自动检测扫描件 PDF 并提取文字
+- 按 `##`/`###` 章节智能切分 + 语义分块（bge-m3 相似度检测话题边界）
+- **Loader 插件注册表**：`@register_loader(['.xyz'])` 自定义解析器
+- 支持 17 种格式：`.pdf` `.md` `.docx` `.html` `.csv` `.pptx` `.xlsx` `.png` `.jpg` `.zip` 等
+
+### 多租户 & 安全
+
+- **多租户权限系统**：租户/用户/API Key/RBAC 四级模型
+- 3 种角色（admin/editor/viewer），5 种权限粒度
+- 全链路 API Key 鉴权中间件
+- 会话管理（Redis，7 天 TTL）
+
+### 工具调用
+
+- **3 个内置工具**：calc 计算器 / time 时间日期 / unit 单位换算
+- LLM 通过 `[TOOL:calc:2+3*4]` 格式调用，系统自动执行并重新生成
+- `@register("name", "description")` 装饰器零侵入扩展
 
 ---
 
@@ -177,6 +194,11 @@ LLM_PROVIDER = "ollama"  # 或 "openai" / "anthropic"
 | `/api/eval` | POST | 触发 RAGAS 评估 |
 | `/api/eval/results` | GET | 查看评估结果 |
 | `/api/github/sync` | POST | 同步 GitHub 仓库 |
+| `/api/sessions` | POST/GET | 创建/列出会话 |
+| `/api/sessions/{sid}` | GET/DELETE | 查看/删除会话+历史 |
+| `/api/tenants` | POST/GET | 创建/列出多租户 |
+| `/api/tenants/{tid}/users` | POST/GET | 管理用户+角色 |
+| `/ws/progress/{task_id}` | WebSocket | 实时索引进度推送 |
 | `/api/health` | GET | 健康检查（含 Redis/PG/Ollama 连通性） |
 
 ---
@@ -202,14 +224,26 @@ brianrag/
 │   ├── metrics.py           # Prometheus 指标
 │   └── telemetry.py         # OpenTelemetry 追踪
 ├── utils/
-│   ├── document_loader.py   # 文档加载与智能分块
+│   ├── document_loader.py   # 文档加载（注册表+版式分析+OCR）
+│   ├── layout_analyzer.py   # PDF 版式分析器（多栏/表格/标题）
+│   ├── ocr.py               # OCR 引擎（PaddleOCR + Tesseract）
+│   ├── auth.py              # 多租户 + RBAC 权限系统
+│   ├── session_manager.py   # Redis 会话管理
 │   ├── github_sync.py       # GitHub 仓库同步
-│   └── history_manager.py   # 对话历史管理
+│   ├── dir_watcher.py       # 文件系统监控（增量索引）
+│   ├── history_manager.py   # 对话历史管理
+│   └── hot_question_tracker.py  # 热点问题追踪
+├── core/
+│   ├── tools.py             # 工具调用系统（calc/time/unit）
+│   ├── agents.py            # LangGraph 多模态智能体
+│   ├── graph_workflow.py    # 迭代 RAG 工作流
+│   └── prewarm.py           # 预训练缓存引擎
 ├── evaluation/evaluate.py   # RAGAS 评估脚本
-├── frontend/index.html      # 前端单文件（Three.js + GSAP + Chat UI）
-├── config.py                # 全局配置
+├── frontend/index.html      # 前端（Three.js + GSAP + Chat UI）
+├── tests/                   # 46 tests, 5 模块
+├── config.py                # pydantic-settings 配置
 ├── run.py                   # 启动入口
-├── tasks.py                 # Celery 异步任务
+├── pyproject.toml           # Python 打包标准
 └── data/                    # 文档 + 元数据
 ```
 

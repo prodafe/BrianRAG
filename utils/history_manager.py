@@ -1,8 +1,10 @@
 import hashlib
 from datetime import datetime
-from sqlalchemy import create_engine, Column, String, DateTime, Integer
-from sqlalchemy.orm import declarative_base, sessionmaker
+
 from pgvector.sqlalchemy import Vector
+from sqlalchemy import Column, DateTime, Integer, String, create_engine
+from sqlalchemy.orm import declarative_base, sessionmaker
+
 from config import Config
 from core.retriever import OllamaEmbeddings
 

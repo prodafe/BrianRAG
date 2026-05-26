@@ -1,11 +1,11 @@
 """GitHub 数据源同步 —— git clone / pull + 变更检测 + 增量索引"""
 
-import os
+import contextlib
 import glob
 import hashlib
 import logging
+import os
 import time
-from typing import List, Dict, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +40,7 @@ class GitHubSyncManager:
 
     # ── Clone / Pull ─────────────────────────────────────
 
-    def clone(self) -> Tuple[bool, str]:
+    def clone(self) -> tuple[bool, str]:
         """首次克隆仓库"""
         if self.cloned:
             return True, "仓库已存在，跳过克隆"
@@ -60,7 +60,7 @@ class GitHubSyncManager:
             logger.error(f"克隆失败: {error_msg}")
             return False, f"克隆失败: {error_msg}"
 
-    def pull(self) -> Tuple[bool, str, List[str]]:
+    def pull(self) -> tuple[bool, str, list[str]]:
         """拉取最新变更，返回变更文件列表"""
         if not self.cloned:
             return False, "仓库尚未克隆，请先执行 clone", []
@@ -98,7 +98,7 @@ class GitHubSyncManager:
 
     # ── 变更检测 ─────────────────────────────────────────
 
-    def _get_changed_files(self, old_commit: str, new_commit: str) -> List[str]:
+    def _get_changed_files(self, old_commit: str, new_commit: str) -> list[str]:
         """通过 git diff 获取变更的文件"""
         changed = []
         try:
@@ -123,7 +123,7 @@ class GitHubSyncManager:
 
         return any(fnmatch.fnmatch(filename.lower(), p) for p in self.doc_patterns)
 
-    def _scan_files(self) -> List[str]:
+    def _scan_files(self) -> list[str]:
         """全量扫描匹配的文件"""
         files = []
         for pattern in self.doc_patterns:
@@ -133,7 +133,7 @@ class GitHubSyncManager:
         files = [f for f in files if ".git" not in f.replace(os.sep, "/").split("/")]
         return files
 
-    def list_documents(self) -> List[str]:
+    def list_documents(self) -> list[str]:
         """列出所有可索引的文档文件"""
         if not self.cloned:
             return []
@@ -158,16 +158,14 @@ class GitHubSyncManager:
             "document_count": len(self.list_documents()) if self.cloned else 0,
         }
         if self.cloned and self._repo:
-            try:
+            with contextlib.suppress(Exception):
                 status["current_commit"] = self._repo.head.commit.hexsha[:8]
-            except Exception:
-                pass
         return status
 
 
 # ── 全局实例 ─────────────────────────────────────────────
 
-_sync_manager: Optional[GitHubSyncManager] = None
+_sync_manager: GitHubSyncManager | None = None
 
 
 def get_github_sync() -> GitHubSyncManager:

@@ -1,6 +1,6 @@
 """BrianRAG 配置 — pydantic-settings，自动从 .env / 环境变量加载"""
+
 import os
-from pathlib import Path
 
 try:
     from pydantic_settings import BaseSettings
@@ -11,21 +11,21 @@ except ImportError:
 _BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 if BaseSettings is not object:
+
     class _Settings(BaseSettings):
-        model_config = {"env_prefix": "BRIAN_", "env_file": ".env",
-                        "env_file_encoding": "utf-8", "extra": "ignore"}
+        model_config = {"env_prefix": "BRIAN_", "env_file": ".env", "env_file_encoding": "utf-8", "extra": "ignore"}
 
         def __getattr__(self, name: str):
             """向下兼容 UPPER_CASE 属性名 → 自动映射到 lower_case"""
-            if name.isupper() and not name.startswith('_'):
+            if name.isupper() and not name.startswith("_"):
                 lower = name.lower()
                 if lower in self.model_fields:
                     return getattr(self, lower)
-            raise AttributeError(f'{type(self).__name__!r} object has no attribute {name!r}')
+            raise AttributeError(f"{type(self).__name__!r} object has no attribute {name!r}")
 
         def __setattr__(self, name: str, value):
             """向下兼容 UPPER_CASE 赋值 → 映射到 lower_case 字段"""
-            if name.isupper() and not name.startswith('_'):
+            if name.isupper() and not name.startswith("_"):
                 lower = name.lower()
                 if lower in self.model_fields:
                     object.__setattr__(self, lower, value)
@@ -121,7 +121,9 @@ if BaseSettings is not object:
 
         @property
         def async_database_url(self) -> str:
-            return self.database_url.replace("+psycopg://", "+asyncpg://").replace("postgresql://", "postgresql+asyncpg://")
+            return self.database_url.replace("+psycopg://", "+asyncpg://").replace(
+                "postgresql://", "postgresql+asyncpg://"
+            )
 
         # ── Chroma (备用) ──
         chroma_persist_dir: str = os.path.join(_BASE_DIR, "chroma_db")
@@ -210,66 +212,115 @@ else:
             self.log_dir = os.path.join(_BASE_DIR, "logs")
             self.images_dir = os.path.join(_BASE_DIR, "data", "images")
             self.doc_meta_file = os.path.join(_BASE_DIR, "index", "doc_meta.json")
-            self.top_k = 5; self.alpha = 0.5; self.score_threshold = 0.3
-            self.enable_mmr = True; self.mmr_lambda = 0.7
+            self.top_k = 5
+            self.alpha = 0.5
+            self.score_threshold = 0.3
+            self.enable_mmr = True
+            self.mmr_lambda = 0.7
             self.enable_rerank = True
             self.rerank_model = os.path.join(_BASE_DIR, "models", "bge-reranker-v2-m3")
-            self.rerank_use_fp16 = True; self.rerank_top_k = 3; self.rerank_candidate_multiplier = 2
-            self.embedding_binding = "ollama"; self.embedding_model = "bge-m3:latest"
-            self.embedding_dim = 1024; self.embedding_binding_host = "http://localhost:11434"
-            self.llm_provider = "ollama"; self.llm_model = "qwen2.5:7b"
-            self.ollama_base_url = "http://localhost:11434"; self.llm_api_key = ""
+            self.rerank_use_fp16 = True
+            self.rerank_top_k = 3
+            self.rerank_candidate_multiplier = 2
+            self.embedding_binding = "ollama"
+            self.embedding_model = "bge-m3:latest"
+            self.embedding_dim = 1024
+            self.embedding_binding_host = "http://localhost:11434"
+            self.llm_provider = "ollama"
+            self.llm_model = "qwen2.5:7b"
+            self.ollama_base_url = "http://localhost:11434"
+            self.llm_api_key = ""
             self.evaluator_model = "qwen2.5:1.5b"
-            self.chunk_size = 800; self.chunk_overlap = 100
-            self.enable_semantic_chunking = True; self.semantic_chunk_threshold = 0.45
-            self.enable_graph = True; self.graph_file = os.path.join(_BASE_DIR, "index", "knowledge_graph.gpickle")
-            self.graph_hops = 1; self.triple_extract_model = "qwen2.5:7b"
-            self.enable_cache = True; self.cache_similarity_threshold = 0.95; self.max_history_turns = 5
-            self.embed_batch_size = 16; self.hybrid_search_workers = 3
-            self.vision_workers = 4; self.vector_hnsw_ef_search = 100
+            self.chunk_size = 800
+            self.chunk_overlap = 100
+            self.enable_semantic_chunking = True
+            self.semantic_chunk_threshold = 0.45
+            self.enable_graph = True
+            self.graph_file = os.path.join(_BASE_DIR, "index", "knowledge_graph.gpickle")
+            self.graph_hops = 1
+            self.triple_extract_model = "qwen2.5:7b"
+            self.enable_cache = True
+            self.cache_similarity_threshold = 0.95
+            self.max_history_turns = 5
+            self.embed_batch_size = 16
+            self.hybrid_search_workers = 3
+            self.vision_workers = 4
+            self.vector_hnsw_ef_search = 100
             self.vision_model = "qwen2.5vl:7b"
-            self.enable_self_correction = True; self.self_correction_max_retries = 2
+            self.enable_self_correction = True
+            self.self_correction_max_retries = 2
             self.self_correction_score_threshold = 0.6
             self.enable_entity_normalization = True
             self.splink_blocking_rule = "l.entity_name = r.entity_name"
-            self.splink_comparison_levels = [2, 5]; self.splink_jaro_winkler_thresholds = [0.9, 0.95]
-            self.enable_query_rewrite = True; self.enable_hyde = True; self.hyde_top_k = 5
-            self.enable_multi_query = True; self.enable_synonym_expansion = True
-            self.database_url = os.getenv("DATABASE_URL", "postgresql+psycopg://postgres:postgres@localhost:5432/postgres")
-            self.vector_table_name = "brianrag_vectors"; self.vector_index_type = "HNSW"
-            self.vector_hnsw_m = 48; self.vector_hnsw_ef_construction = 200
+            self.splink_comparison_levels = [2, 5]
+            self.splink_jaro_winkler_thresholds = [0.9, 0.95]
+            self.enable_query_rewrite = True
+            self.enable_hyde = True
+            self.hyde_top_k = 5
+            self.enable_multi_query = True
+            self.enable_synonym_expansion = True
+            self.database_url = os.getenv(
+                "DATABASE_URL", "postgresql+psycopg://postgres:postgres@localhost:5432/postgres"
+            )
+            self.vector_table_name = "brianrag_vectors"
+            self.vector_index_type = "HNSW"
+            self.vector_hnsw_m = 48
+            self.vector_hnsw_ef_construction = 200
             self.chroma_persist_dir = os.path.join(_BASE_DIR, "chroma_db")
             self.redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-            self.enable_context_expansion = True; self.enable_secondary_retrieval = True
+            self.enable_context_expansion = True
+            self.enable_secondary_retrieval = True
             self.secondary_retrieval_threshold = 0.65
-            self.context_expansion_before = 1; self.context_expansion_after = 1
-            self.enable_retrieval_gating = True; self.gating_score_threshold = 0.35
+            self.context_expansion_before = 1
+            self.context_expansion_after = 1
+            self.enable_retrieval_gating = True
+            self.gating_score_threshold = 0.35
             self.gating_max_retries = 2
             self.gating_knowledge_gap_response = "该问题超出当前知识库范围，建议补充相关文档或换个问法。"
-            self.github_repo_url = ""; self.github_branch = "main"; self.github_token = ""
+            self.github_repo_url = ""
+            self.github_branch = "main"
+            self.github_token = ""
             self.github_local_path = os.path.join(_BASE_DIR, "data", "github_repo")
             self.github_sync_interval = 300
             self.github_doc_patterns = ["*.md", "*.txt", "*.pdf", "*.docx", "*.html", "*.csv"]
-            self.intent_weight_formula = 1.2; self.intent_weight_definition = 1.2
-            self.intent_weight_procedure = 1.2; self.dynamic_alpha = True; self.enable_intent_weighting = True
-            self.enable_multimodal = True; self.multimodal_model_path = ""
-            self.multimodal_device = "cuda"; self.multimodal_similarity_threshold = 0.7
-            self.multimodal_top_k = 3; self.multimodal_fusion_weight = 0.3
-            self.fe_domain = "http://localhost:8000"; self.images_url_prefix = "/images"
+            self.intent_weight_formula = 1.2
+            self.intent_weight_definition = 1.2
+            self.intent_weight_procedure = 1.2
+            self.dynamic_alpha = True
+            self.enable_intent_weighting = True
+            self.enable_multimodal = True
+            self.multimodal_model_path = ""
+            self.multimodal_device = "cuda"
+            self.multimodal_similarity_threshold = 0.7
+            self.multimodal_top_k = 3
+            self.multimodal_fusion_weight = 0.3
+            self.fe_domain = "http://localhost:8000"
+            self.images_url_prefix = "/images"
             self.process_missing_images = True
-            self.enable_telemetry = True; self.otlp_endpoint = "http://localhost:4318/v1/traces"
+            self.enable_telemetry = True
+            self.otlp_endpoint = "http://localhost:4318/v1/traces"
             self.enable_metrics = True
-            self.log_level = "INFO"; self.log_file = "logs/brianrag.log"
-            self.log_max_bytes = 10 * 1024 * 1024; self.log_backup_count = 5
-            self.hot_question_threshold = 20; self.hot_question_ttl = 7 * 24 * 3600
+            self.log_level = "INFO"
+            self.log_file = "logs/brianrag.log"
+            self.log_max_bytes = 10 * 1024 * 1024
+            self.log_backup_count = 5
+            self.hot_question_threshold = 20
+            self.hot_question_ttl = 7 * 24 * 3600
             self.hot_question_prewarm_interval = 3600
-            self.prewarm_question_count = 150; self.prewarm_similarity_threshold = 0.72
+            self.prewarm_question_count = 150
+            self.prewarm_similarity_threshold = 0.72
             self.tune_enabled = False
-            self.tune_param_grid = {"alpha": [0.3, 0.5, 0.7, 0.9], "top_k": [3, 5, 7], "score_threshold": [0.2, 0.3, 0.4]}
+            self.tune_param_grid = {
+                "alpha": [0.3, 0.5, 0.7, 0.9],
+                "top_k": [3, 5, 7],
+                "score_threshold": [0.2, 0.3, 0.4],
+            }
 
         @property
         def async_database_url(self):
-            return self.database_url.replace("+psycopg://", "+asyncpg://").replace("postgresql://", "postgresql+asyncpg://")
+            return self.database_url.replace("+psycopg://", "+asyncpg://").replace(
+                "postgresql://", "postgresql+asyncpg://"
+            )
 
     Config = _Config()
 

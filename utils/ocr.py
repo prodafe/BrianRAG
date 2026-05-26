@@ -1,13 +1,10 @@
 """OCR 模块 — 扫描件 PDF/图片文字提取，支持 Tesseract 和 PaddleOCR"""
+
 import logging
 import os
 import tempfile
-from typing import Optional
 
-import numpy as np
 from PIL import Image
-
-from config import Config
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +26,7 @@ try:
 except ImportError:
     pass
 
-_ocr_instance: Optional[object] = None
+_ocr_instance: object | None = None
 
 
 def _get_paddle():

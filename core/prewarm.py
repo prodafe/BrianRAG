@@ -1,7 +1,10 @@
 """RAG 预训练缓存系统 — 基于文档内容预生成问答对并缓存"""
 
-import json, os, time, hashlib, logging, numpy as np
-from typing import List, Dict, Optional
+import json
+import logging
+import time
+
+import numpy as np
 import redis
 
 from config import Config
@@ -34,7 +37,7 @@ class PrewarmEngine:
         self._memory_cache = []
         self._memory_embeddings = []
 
-    def generate_questions_from_chunks(self, chunks: List[str], count: int = 150) -> List[str]:
+    def generate_questions_from_chunks(self, chunks: list[str], count: int = 150) -> list[str]:
         """基于文档内容用 LLM 生成可能的问题"""
         all_questions = []
         # 先筛选长文本，再均匀采样
@@ -80,7 +83,7 @@ class PrewarmEngine:
         logger.info(f"去重后: {len(unique)} 个问题")
         return unique[:count]
 
-    def precompute_answers(self, questions: List[str], progress_cb=None) -> List[Dict]:
+    def precompute_answers(self, questions: list[str], progress_cb=None) -> list[dict]:
         """对所有问题预计算答案"""
         if self.pipeline is None:
             from core.rag_pipeline import RAGPipeline
@@ -112,7 +115,7 @@ class PrewarmEngine:
 
         return results
 
-    def store_results(self, results: List[Dict]):
+    def store_results(self, results: list[dict]):
         """存储问答对到 Redis 或内存"""
         # 始终保存到内存缓存
         self._memory_cache = results
@@ -153,7 +156,7 @@ class PrewarmEngine:
         except Exception as e:
             logger.warning(f"嵌入向量生成失败: {e}")
 
-    def find_similar(self, query: str) -> Optional[Dict]:
+    def find_similar(self, query: str) -> dict | None:
         """查找与用户问题最相似的预计算答案（优先 Redis，回退内存）"""
         if not self._memory_cache and not (self._redis_available and self.redis):
             return None
@@ -238,7 +241,7 @@ class PrewarmEngine:
         logger.info(f"预训练完成: {len(results)} 个问答对已缓存")
         return len(results)
 
-    def get_status(self) -> Dict:
+    def get_status(self) -> dict:
         """获取预训练状态"""
         count = len(self._memory_cache)
         if self._redis_available and self.redis:

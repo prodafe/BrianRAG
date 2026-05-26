@@ -1,5 +1,5 @@
-import re
 import logging
+import re
 from typing import Any
 
 from config import Config
@@ -48,7 +48,7 @@ class SelfCorrector:
                 if 0 <= idx < len(contexts):
                     citations[num] = contexts[idx]
             return corrected, citations
-        except Exception as e:
+        except Exception:
             return answer, {}
 
     def evaluate_answer(self, question: str, answer: str, context_chunks: list[str]) -> float:

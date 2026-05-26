@@ -7,25 +7,26 @@ RAGAS 离线评估脚本，支持对比模式
     python evaluate.py --compare logs/run1/report.json logs/run2/report.json
 """
 
-import os
-import sys
 import json
 import logging
-from typing import List, Dict, Any, Optional
+import os
+import sys
+from typing import Any
+
 import pandas as pd
-from tqdm import tqdm
+from datasets import Dataset
+from langchain_community.chat_models import ChatOllama
+from langchain_community.embeddings import OllamaEmbeddings
 from ragas import evaluate
+from ragas.embeddings import LangchainEmbeddingsWrapper
+from ragas.llms import LangchainLLMWrapper
 from ragas.metrics import (
-    faithfulness,
     answer_relevancy,
     context_precision,
     context_recall,
+    faithfulness,
 )
-from ragas.llms import LangchainLLMWrapper
-from ragas.embeddings import LangchainEmbeddingsWrapper
-from langchain_community.chat_models import ChatOllama
-from langchain_community.embeddings import OllamaEmbeddings
-from datasets import Dataset
+from tqdm import tqdm
 
 # ---------- 路径处理：确保能导入项目模块 ----------
 # 当前脚本所在目录（即 evaluation 文件夹）
@@ -59,7 +60,7 @@ def load_test_data(file_path: str) -> pd.DataFrame:
     if file_path.endswith(".jsonl"):
         df = pd.read_json(file_path, lines=True)
     else:
-        with open(file_path, "r", encoding="utf-8") as f:
+        with open(file_path, encoding="utf-8") as f:
             data = json.load(f)
         df = pd.DataFrame(data)
 
@@ -76,10 +77,10 @@ def run_evaluation(
     test_data_path: str,
     query_mode: str = "快速模式 (RAG)",
     output_dir: str = "logs/evaluation",
-    limit: Optional[int] = None,
-    metrics: Optional[List[str]] = None,
+    limit: int | None = None,
+    metrics: list[str] | None = None,
     skip_missing_contexts: bool = True,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     os.makedirs(output_dir, exist_ok=True)
 
     df = load_test_data(test_data_path)
@@ -95,7 +96,7 @@ def run_evaluation(
     ground_truths = []
     ground_truth_contexts_list = []
 
-    for idx, row in tqdm(df.iterrows(), total=len(df), desc="Evaluating"):
+    for _idx, row in tqdm(df.iterrows(), total=len(df), desc="Evaluating"):
         question = row["question"]
         gt = row.get("ground_truth", "")
         gt_ctx = row.get("ground_truth_contexts", [])
@@ -196,7 +197,7 @@ def run_evaluation(
 
 def compare_evaluations(report1_path: str, report2_path: str):
     """对比两次评估的 report.json"""
-    with open(report1_path, "r") as f1, open(report2_path, "r") as f2:
+    with open(report1_path) as f1, open(report2_path) as f2:
         r1 = json.load(f1)
         r2 = json.load(f2)
 

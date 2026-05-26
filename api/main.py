@@ -397,7 +397,7 @@ async def upload_files(files: list[UploadFile] = File(...)):
             with zipfile.ZipFile(temp_zip, "r") as zip_ref:
                 zip_ref.extractall(extract_dir)
             os.remove(temp_zip)
-            for root, dirs, files_in_extract in os.walk(extract_dir):
+            for root, _dirs, files_in_extract in os.walk(extract_dir):
                 for fname in files_in_extract:
                     full_path = os.path.join(root, fname)
                     saved_paths.append(full_path)
@@ -495,8 +495,6 @@ class QueryRequest(BaseModel):
     question: str
     mode: str = "rag"  # "rag" | "agentic" | "graph" | "multimodal"
     history: list[dict] = []
-
-
 
 
 _pipeline = None

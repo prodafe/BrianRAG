@@ -1,6 +1,8 @@
 """LLM Provider + SelfCorrector 模块测试"""
-import pytest
+
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 
 class TestProviderFactory:

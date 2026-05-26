@@ -1,5 +1,7 @@
-import redis
 import re
+
+import redis
+
 from config import Config
 
 r = redis.Redis(host="localhost", port=6379, db=0, decode_responses=True)

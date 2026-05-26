@@ -2,7 +2,7 @@
 
 import logging
 from abc import ABC, abstractmethod
-from typing import List, Iterator, Optional
+from collections.abc import Iterator
 
 logger = logging.getLogger(__name__)
 
@@ -17,12 +17,12 @@ class BaseLLMProvider(ABC):
         ...
 
     @abstractmethod
-    def chat(self, messages: List[dict], model: str = None, **kwargs) -> str:
+    def chat(self, messages: list[dict], model: str = None, **kwargs) -> str:
         """对话式生成"""
         ...
 
     @abstractmethod
-    def chat_stream(self, messages: List[dict], model: str = None, **kwargs) -> Iterator[str]:
+    def chat_stream(self, messages: list[dict], model: str = None, **kwargs) -> Iterator[str]:
         """流式对话生成"""
         ...
 
@@ -41,13 +41,13 @@ class OllamaLLMProvider(BaseLLMProvider):
         resp = self._client.generate(model=m, prompt=prompt, options=opts, **kwargs)
         return resp["response"].strip()
 
-    def chat(self, messages: List[dict], model: str = None, **kwargs) -> str:
+    def chat(self, messages: list[dict], model: str = None, **kwargs) -> str:
         opts = kwargs.pop("options", {})
         m = model or self.model
         resp = self._client.chat(model=m, messages=messages, options=opts, **kwargs)
         return resp["message"]["content"].strip()
 
-    def chat_stream(self, messages: List[dict], model: str = None, **kwargs) -> Iterator[str]:
+    def chat_stream(self, messages: list[dict], model: str = None, **kwargs) -> Iterator[str]:
         opts = kwargs.pop("options", {})
         m = model or self.model
         for chunk in self._client.chat(model=m, messages=messages, stream=True, options=opts, **kwargs):
@@ -67,7 +67,7 @@ class OpenAIProvider(BaseLLMProvider):
     def generate(self, prompt: str, model: str = None, **kwargs) -> str:
         return self.chat([{"role": "user", "content": prompt}], model=model, **kwargs)
 
-    def chat(self, messages: List[dict], model: str = None, **kwargs) -> str:
+    def chat(self, messages: list[dict], model: str = None, **kwargs) -> str:
         temperature = kwargs.pop("temperature", 0)
         max_tokens = kwargs.pop("max_tokens", kwargs.pop("num_predict", 1024))
         resp = self._client.chat.completions.create(
@@ -75,7 +75,7 @@ class OpenAIProvider(BaseLLMProvider):
         )
         return resp.choices[0].message.content.strip()
 
-    def chat_stream(self, messages: List[dict], model: str = None, **kwargs) -> Iterator[str]:
+    def chat_stream(self, messages: list[dict], model: str = None, **kwargs) -> Iterator[str]:
         temperature = kwargs.pop("temperature", 0)
         max_tokens = kwargs.pop("max_tokens", kwargs.pop("num_predict", 1024))
         stream = self._client.chat.completions.create(
@@ -101,7 +101,7 @@ class AnthropicProvider(BaseLLMProvider):
     def generate(self, prompt: str, model: str = None, **kwargs) -> str:
         return self.chat([{"role": "user", "content": prompt}], model=model, **kwargs)
 
-    def chat(self, messages: List[dict], model: str = None, **kwargs) -> str:
+    def chat(self, messages: list[dict], model: str = None, **kwargs) -> str:
         # Anthropic 要求 system 单独提取
         system = None
         user_msgs = []
@@ -116,7 +116,7 @@ class AnthropicProvider(BaseLLMProvider):
         )
         return resp.content[0].text.strip()
 
-    def chat_stream(self, messages: List[dict], **kwargs) -> Iterator[str]:
+    def chat_stream(self, messages: list[dict], **kwargs) -> Iterator[str]:
         system = None
         user_msgs = []
         for m in messages:
@@ -128,8 +128,7 @@ class AnthropicProvider(BaseLLMProvider):
         with self._client.messages.stream(
             model=self.model, system=system, messages=user_msgs, max_tokens=max_tokens, **kwargs
         ) as stream:
-            for text in stream.text_stream:
-                yield text
+            yield from stream.text_stream
 
 
 # ── Embedding Provider ───────────────────────────────────
@@ -137,10 +136,10 @@ class AnthropicProvider(BaseLLMProvider):
 
 class BaseEmbeddingProvider(ABC):
     @abstractmethod
-    def embed(self, texts: List[str]) -> List[List[float]]: ...
+    def embed(self, texts: list[str]) -> list[list[float]]: ...
 
     @abstractmethod
-    def embed_query(self, text: str) -> List[float]: ...
+    def embed_query(self, text: str) -> list[float]: ...
 
 
 class OllamaEmbeddingProvider(BaseEmbeddingProvider):
@@ -151,11 +150,11 @@ class OllamaEmbeddingProvider(BaseEmbeddingProvider):
         self.base_url = base_url.rstrip("/")
         self._client = ollama.Client(host=self.base_url)
 
-    def embed(self, texts: List[str]) -> List[List[float]]:
+    def embed(self, texts: list[str]) -> list[list[float]]:
         resp = self._client.embed(model=self.model, input=texts)
         return resp["embeddings"]
 
-    def embed_query(self, text: str) -> List[float]:
+    def embed_query(self, text: str) -> list[float]:
         return self.embed([text])[0]
 
 
@@ -166,19 +165,19 @@ class OpenAIEmbeddingProvider(BaseEmbeddingProvider):
         self.model = model
         self._client = OpenAI(base_url=base_url, api_key=api_key)
 
-    def embed(self, texts: List[str]) -> List[List[float]]:
+    def embed(self, texts: list[str]) -> list[list[float]]:
         resp = self._client.embeddings.create(model=self.model, input=texts)
         return [d.embedding for d in resp.data]
 
-    def embed_query(self, text: str) -> List[float]:
+    def embed_query(self, text: str) -> list[float]:
         return self.embed([text])[0]
 
 
 # ── Factory ──────────────────────────────────────────────
 
-_llm_provider: Optional[BaseLLMProvider] = None
-_embed_provider: Optional[BaseEmbeddingProvider] = None
-_small_llm: Optional[BaseLLMProvider] = None
+_llm_provider: BaseLLMProvider | None = None
+_embed_provider: BaseEmbeddingProvider | None = None
+_small_llm: BaseLLMProvider | None = None
 
 
 def get_llm_provider() -> BaseLLMProvider:

@@ -1,19 +1,21 @@
-import os
-from langchain_classic.agents import create_react_agent, AgentExecutor
-from langchain_core.tools import tool
+from langchain_classic.agents import AgentExecutor, create_react_agent
 from langchain_community.chat_models import ChatOllama
 from langchain_core.prompts import PromptTemplate
+from langchain_core.tools import tool
+
 from config import Config
 from core.retriever import HybridRetriever
 
 # 延迟初始化检索器（避免 import 时创建数据库连接）
 _retriever = None
 
+
 def _get_retriever():
     global _retriever
     if _retriever is None:
         _retriever = HybridRetriever()
     return _retriever
+
 
 # 定义唯一工具：知识检索
 @tool
@@ -23,6 +25,7 @@ def knowledge_search(query: str) -> str:
     if not chunks:
         return "未找到相关信息。"
     return "\n\n".join(chunks)
+
 
 tools = [knowledge_search]
 
@@ -55,6 +58,7 @@ prompt = PromptTemplate.from_template(template)
 # 创建 Agent 执行器
 agent = create_react_agent(llm, tools, prompt)
 agent_executor = AgentExecutor(agent=agent, tools=tools, verbose=True, handle_parsing_errors=True)
+
 
 def run_agent(question: str, history=None) -> str:
     """运行智能体，返回最终答案"""

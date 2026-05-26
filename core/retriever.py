@@ -3,36 +3,34 @@ import sys
 
 if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
-from sqlalchemy import text
-import os
-import jieba
-import json
 import hashlib
+import json
+import logging
+import os
 import pickle
 import re
 import time
-import logging
-import numpy as np
-from typing import List, Tuple, Optional
+from concurrent.futures import ThreadPoolExecutor
 
+import jieba
+import jieba.analyse
+import numpy as np
 import ollama
 import torch
-from transformers import CLIPModel, CLIPProcessor
-from PIL import Image
-from rank_bm25 import BM25Okapi
-from langchain_classic.text_splitter import RecursiveCharacterTextSplitter
-from langchain_postgres import PGVectorStore, PGEngine
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
+from langchain_postgres import PGEngine, PGVectorStore
+from PIL import Image
+from rank_bm25 import BM25Okapi
+from sqlalchemy import create_engine, text
+from transformers import CLIPModel, CLIPProcessor
+
 from config import Config
-from utils.document_loader import load_single_document
-from sqlalchemy import create_engine
-from concurrent.futures import ThreadPoolExecutor
-import jieba.analyse
 from core.intent_classifier import IntentClassifier
 
 # METRICS: 导入指标记录函数
-from core.metrics import record_retrieval, record_vision_call, record_llm_call
+from core.metrics import record_retrieval, record_vision_call
+from utils.document_loader import load_single_document
 
 logger = logging.getLogger(__name__)
 
@@ -74,15 +72,15 @@ class OllamaEmbeddings(Embeddings):
 
 
 class ClipRetriever:
-    def __init__(self, model_path: Optional[str] = None, index_path: Optional[str] = None):
+    def __init__(self, model_path: str | None = None, index_path: str | None = None):
         self.model_path = model_path or getattr(Config, "MULTIMODAL_MODEL_PATH", r"D:\models\clip-ViT-B-32")
         self.index_path = index_path or os.path.join(Config.INDEX_DIR, "clip_index.pkl")
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.model = CLIPModel.from_pretrained(self.model_path).to(self.device)
         self.processor = CLIPProcessor.from_pretrained(self.model_path)
         self.model.eval()
-        self.image_paths: List[str] = []
-        self.image_metadatas: List[dict] = []
+        self.image_paths: list[str] = []
+        self.image_metadatas: list[dict] = []
         self.image_embeddings: np.ndarray = np.empty((0, 512))
         self.load_index()
 
@@ -91,14 +89,14 @@ class ClipRetriever:
             return path
         return os.path.join(Config.DATA_DIR, path)
 
-    def _encode_text(self, texts: List[str]) -> np.ndarray:
+    def _encode_text(self, texts: list[str]) -> np.ndarray:
         inputs = self.processor(text=texts, return_tensors="pt", padding=True, truncation=True).to(self.device)
         with torch.no_grad():
             embeddings = self.model.get_text_features(**inputs)
         embeddings = embeddings / embeddings.norm(dim=-1, keepdim=True)
         return embeddings.cpu().numpy()
 
-    def _encode_image(self, image_paths: List[str]) -> Tuple[np.ndarray, List[int]]:
+    def _encode_image(self, image_paths: list[str]) -> tuple[np.ndarray, list[int]]:
         pil_images = []
         valid_indices = []
         for i, path in enumerate(image_paths):
@@ -118,7 +116,7 @@ class ClipRetriever:
         embeddings = embeddings / embeddings.norm(dim=-1, keepdim=True)
         return embeddings.cpu().numpy(), valid_indices
 
-    def rebuild_index_from_documents(self, documents: List[Document]):
+    def rebuild_index_from_documents(self, documents: list[Document]):
         image_paths = []
         metadatas = []
         for doc in documents:
@@ -193,7 +191,7 @@ class ClipRetriever:
         except Exception as e:
             logger.error(f"加载多模态索引失败: {e}")
 
-    def search_by_text(self, query: str, top_k: int = 3) -> List[Tuple[dict, float]]:
+    def search_by_text(self, query: str, top_k: int = 3) -> list[tuple[dict, float]]:
         if self.image_embeddings.size == 0:
             return []
         query_emb = self._encode_text([query])
@@ -211,13 +209,14 @@ class ClipRetriever:
 _MIN_CHUNK_LEN = 50  # 短于此值的 chunk 会被合并到相邻 chunk
 
 
-def _semantic_chunk_paragraphs(paragraphs: List[str], threshold: float = 0.45) -> List[str]:
+def _semantic_chunk_paragraphs(paragraphs: list[str], threshold: float = 0.45) -> list[str]:
     """用 bge-m3 嵌入相似度检测话题边界，将段落聚合成语义连贯的 chunk。
     相邻段落间余弦相似度低于 threshold 的点视为边界。"""
     if len(paragraphs) <= 1:
         return paragraphs
     try:
         import ollama
+
         from config import Config
 
         resp = ollama.embed(model=Config.EMBEDDING_MODEL, input=paragraphs)
@@ -256,7 +255,7 @@ def _semantic_chunk_paragraphs(paragraphs: List[str], threshold: float = 0.45) -
     return result
 
 
-def _merge_short_chunks(chunks: List[Document]) -> List[Document]:
+def _merge_short_chunks(chunks: list[Document]) -> list[Document]:
     """将过短的 chunk 与相邻 chunk 合并，避免图片引用等孤立碎片"""
     if len(chunks) <= 1:
         return chunks
@@ -297,7 +296,7 @@ def _merge_short_chunks(chunks: List[Document]) -> List[Document]:
     return merged
 
 
-def smart_split_markdown(documents: List[Document], chunk_size: int = 1000, chunk_overlap: int = 200) -> List[Document]:
+def smart_split_markdown(documents: list[Document], chunk_size: int = 1000, chunk_overlap: int = 200) -> list[Document]:
     final_chunks = []
     current_section = "Root"
     for doc in documents:
@@ -590,7 +589,7 @@ class HybridRetriever:
             try:
                 response = ollama.embed(model=Config.EMBEDDING_MODEL, input=uncached_texts)
                 embeddings = np.array(response["embeddings"], dtype=np.float32)
-                for i, emb in zip(uncached_indices, embeddings):
+                for i, emb in zip(uncached_indices, embeddings, strict=False):
                     cached[i] = emb
                 # 写入 Redis 缓存
                 try:
@@ -598,7 +597,7 @@ class HybridRetriever:
 
                     _rc = _rds.Redis(host="localhost", port=6379, db=2, decode_responses=False)
                     pipe = _rc.pipeline()
-                    for t, emb in zip(uncached_texts, embeddings):
+                    for t, emb in zip(uncached_texts, embeddings, strict=False):
                         key = f"emb:{hashlib.md5(t.encode()).hexdigest()}"
                         pipe.set(key, emb.tobytes(), ex=86400)
                     pipe.execute()
@@ -617,7 +616,7 @@ class HybridRetriever:
     def _load_doc_meta(self):
         meta_path = os.path.join(Config.INDEX_DIR, "doc_meta.json")
         if os.path.exists(meta_path):
-            with open(meta_path, "r", encoding="utf-8") as f:
+            with open(meta_path, encoding="utf-8") as f:
                 self.doc_meta = json.load(f)
         else:
             self.doc_meta = {}
@@ -953,7 +952,7 @@ class HybridRetriever:
             for future in futures:
                 try:
                     texts, indices, _ = future.result()
-                    for t, idx in zip(texts, indices):
+                    for t, idx in zip(texts, indices, strict=False):
                         if t not in seen_texts:
                             seen_texts.add(t)
                             all_texts.append(t)
@@ -1108,7 +1107,7 @@ class HybridRetriever:
         candidates = {}
 
         # 向量检索
-        for rank, (doc, distance) in enumerate(vector_res[: top_k * 2], start=1):
+        for rank, (doc, _distance) in enumerate(vector_res[: top_k * 2], start=1):
             idx = doc.metadata.get("chunk_index", -1)
             if idx != -1 and 0 <= idx < len(self.chunks):
                 if idx not in candidates:
@@ -1135,7 +1134,7 @@ class HybridRetriever:
 
         # 多模态（虚拟索引）
         multimodal_virtual_start = len(self.chunks)
-        for rank, (doc, score) in enumerate(zip(multimodal_docs, multimodal_scores), start=1):
+        for rank, (doc, score) in enumerate(zip(multimodal_docs, multimodal_scores, strict=False), start=1):
             idx = multimodal_virtual_start + rank - 1
             candidates[idx] = {"text": doc.page_content, "ranks": [("multimodal", rank)], "metadata": doc.metadata}
 

@@ -1,6 +1,8 @@
 """Query Optimizer 模块测试"""
-import pytest
+
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 
 @pytest.fixture
@@ -14,6 +16,7 @@ class TestRewriteQuery:
     def test_rewrite_returns_string(self, mock_llm):
         with patch("core.llm_provider.get_llm_provider", return_value=mock_llm):
             from core.query_optimizer import QueryOptimizer
+
             opt = QueryOptimizer()
             result = opt.rewrite_query("原始查询问题")
             assert isinstance(result, str)
@@ -23,6 +26,7 @@ class TestRewriteQuery:
         mock_llm.generate.side_effect = Exception("LLM down")
         with patch("core.llm_provider.get_llm_provider", return_value=mock_llm):
             from core.query_optimizer import QueryOptimizer
+
             opt = QueryOptimizer()
             result = opt.rewrite_query("原始查询")
             assert result == "原始查询"
@@ -31,6 +35,7 @@ class TestRewriteQuery:
         mock_llm.generate.return_value = ""
         with patch("core.llm_provider.get_llm_provider", return_value=mock_llm):
             from core.query_optimizer import QueryOptimizer
+
             opt = QueryOptimizer()
             result = opt.rewrite_query("原始查询")
             assert result == "原始查询"
@@ -41,6 +46,7 @@ class TestHydeDocument:
         mock_llm.generate.return_value = "假设文档内容"
         with patch("core.llm_provider.get_llm_provider", return_value=mock_llm):
             from core.query_optimizer import QueryOptimizer
+
             opt = QueryOptimizer()
             result = opt.hyde_document("什么是RAG")
             assert isinstance(result, str)
@@ -49,6 +55,7 @@ class TestHydeDocument:
         mock_llm.generate.side_effect = Exception("down")
         with patch("core.llm_provider.get_llm_provider", return_value=mock_llm):
             from core.query_optimizer import QueryOptimizer
+
             opt = QueryOptimizer()
             result = opt.hyde_document("查询")
             assert isinstance(result, str)
@@ -59,6 +66,7 @@ class TestMultiQuery:
         mock_llm.generate.return_value = "查询1\n查询2\n查询3"
         with patch("core.llm_provider.get_llm_provider", return_value=mock_llm):
             from core.query_optimizer import QueryOptimizer
+
             opt = QueryOptimizer()
             queries = opt.generate_multi_queries("测试问题")
             assert isinstance(queries, list)
@@ -68,6 +76,7 @@ class TestMultiQuery:
         mock_llm.generate.side_effect = Exception("down")
         with patch("core.llm_provider.get_llm_provider", return_value=mock_llm):
             from core.query_optimizer import QueryOptimizer
+
             opt = QueryOptimizer()
             queries = opt.generate_multi_queries("问题")
             assert queries == ["问题"]
@@ -78,6 +87,7 @@ class TestOptimizeBatch:
         mock_llm.generate.return_value = "改写后的查询"
         with patch("core.llm_provider.get_llm_provider", return_value=mock_llm):
             from core.query_optimizer import QueryOptimizer
+
             opt = QueryOptimizer()
             result = opt.optimize_batch("测试")
             assert isinstance(result, dict)
@@ -91,6 +101,7 @@ class TestDecomposeQuery:
         mock_llm.generate.side_effect = Exception("down")
         with patch("core.llm_provider.get_llm_provider", return_value=mock_llm):
             from core.query_optimizer import QueryOptimizer
+
             opt = QueryOptimizer()
             result = opt.decompose_query("复杂问题")
             assert result == ["复杂问题"]

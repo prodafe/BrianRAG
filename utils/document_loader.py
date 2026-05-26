@@ -22,10 +22,12 @@ def register_loader(extensions: list[str]):
         def my_loader(file_path: str) -> List[Document]:
             return [Document(page_content=..., metadata=...)]
     """
+
     def decorator(func: Callable[[str], list[Document]]):
         for ext in extensions:
             _loader_registry[ext.lower()] = func
         return func
+
     return decorator
 
 
@@ -35,17 +37,22 @@ def get_registered_loaders() -> dict[str, str]:
 
 def _register_builtins():
     """注册内置加载器（在类定义之后调用）"""
+
     def _md(file_path):
         return MarkdownDocumentLoader().load(file_path)
+
     def _img(file_path):
         return _process_image_file(file_path)
+
     def _unified(file_path):
         return UnifiedDocumentLoader().load(file_path)
+
     _loader_registry[".md"] = _md
     for e in [".jpg", ".jpeg", ".png", ".gif", ".bmp"]:
         _loader_registry[e] = _img
     for e in [".pdf", ".docx", ".html", ".txt", ".csv", ".pptx", ".xlsx", ".xml", ".rtf", ".odt", ".epub"]:
         _loader_registry[e] = _unified
+
 
 try:
     from unstructured.partition.auto import partition
@@ -243,10 +250,7 @@ class MarkdownDocumentLoader:
                     logger.error(f"下载网络图片异常: {e}")
                     return match.group(0)
 
-            if os.path.isabs(img_path):
-                src = img_path
-            else:
-                src = os.path.normpath(os.path.join(base_dir, img_path))
+            src = img_path if os.path.isabs(img_path) else os.path.normpath(os.path.join(base_dir, img_path))
 
             if not os.path.exists(src):
                 logger.warning(f"图片不存在: {src}")

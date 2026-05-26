@@ -1,8 +1,8 @@
 """PDF 版式分析器 — 多栏检测、阅读顺序、表格识别、段落层级"""
+
+import logging
 import os
 import re
-import logging
-from typing import List, Tuple, Optional
 
 import fitz  # PyMuPDF
 
@@ -38,7 +38,7 @@ class LayoutBlock:
         return self.height / max(len(self.text.split("\n")), 1) if self.text else 12
 
 
-def _detect_columns(blocks: List[LayoutBlock], page_width: float, overlap_ratio: float = 0.3) -> int:
+def _detect_columns(blocks: list[LayoutBlock], page_width: float, overlap_ratio: float = 0.3) -> int:
     """通过水平投影检测列数"""
     if not blocks or page_width < 400:
         return 1
@@ -54,7 +54,7 @@ def _detect_columns(blocks: List[LayoutBlock], page_width: float, overlap_ratio:
     return min(len(col_gaps) + 1, 3)
 
 
-def _sort_by_reading_order(blocks: List[LayoutBlock], num_columns: int, page_width: float) -> List[LayoutBlock]:
+def _sort_by_reading_order(blocks: list[LayoutBlock], num_columns: int, page_width: float) -> list[LayoutBlock]:
     """按阅读顺序排序：从上到下，列内从左到右"""
     if num_columns <= 1:
         return sorted(blocks, key=lambda b: (b.y0, b.x0))
@@ -83,7 +83,7 @@ def _sort_by_reading_order(blocks: List[LayoutBlock], num_columns: int, page_wid
     return result
 
 
-def _detect_tables(blocks: List[LayoutBlock], table_min_rows: int = 3) -> List[LayoutBlock]:
+def _detect_tables(blocks: list[LayoutBlock], table_min_rows: int = 3) -> list[LayoutBlock]:
     """检测文本块中的表格模式"""
     if len(blocks) < table_min_rows:
         return blocks
@@ -136,7 +136,7 @@ def _detect_tables(blocks: List[LayoutBlock], table_min_rows: int = 3) -> List[L
     return result
 
 
-def _detect_headings(blocks: List[LayoutBlock], avg_font_size: float) -> List[LayoutBlock]:
+def _detect_headings(blocks: list[LayoutBlock], avg_font_size: float) -> list[LayoutBlock]:
     """检测标题：字体显著大于正文 或 粗体短文本"""
     for b in blocks:
         if b.block_type != "text":
@@ -155,7 +155,7 @@ def _detect_headings(blocks: List[LayoutBlock], avg_font_size: float) -> List[La
     return blocks
 
 
-def _extract_images(page: fitz.Page, page_num: int, output_dir: str) -> List[LayoutBlock]:
+def _extract_images(page: fitz.Page, page_num: int, output_dir: str) -> list[LayoutBlock]:
     """提取页面中的图片"""
     img_blocks = []
     for img_index, img in enumerate(page.get_images(full=True)):
@@ -179,7 +179,10 @@ def _extract_images(page: fitz.Page, page_num: int, output_dir: str) -> List[Lay
                 r = rects[0]
                 img_blocks.append(
                     LayoutBlock(
-                        x0=r.x0, y0=r.y0, x1=r.x1, y1=r.y1,
+                        x0=r.x0,
+                        y0=r.y0,
+                        x1=r.x1,
+                        y1=r.y1,
                         text=f"![图片](images/{filename})",
                         block_type="image",
                         page_num=page_num,
@@ -264,11 +267,7 @@ def analyze_pdf_layout(pdf_path: str, image_output_dir: str = "") -> str:
         # 7. 生成 Markdown
         page_md = []
         for b in blocks:
-            if b.block_type == "heading":
-                page_md.append(b.text)
-            elif b.block_type == "table":
-                page_md.append(b.text)
-            elif b.block_type == "image":
+            if b.block_type == "heading" or b.block_type == "table" or b.block_type == "image":
                 page_md.append(b.text)
             else:
                 page_md.append(b.text)

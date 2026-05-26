@@ -1,18 +1,17 @@
-import re
-import os
-import time
-import hashlib
-import pickle
 import base64
-import logging
+import hashlib
 import io
+import logging
+import os
+import pickle
+import re
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import List, Dict, Any, Optional, Literal, Annotated, TypedDict
+from typing import Any, Literal, TypedDict
 
-import operator
-import pandas as pd
 import ollama
-from langgraph.graph import StateGraph, END
+import pandas as pd
+from langgraph.graph import END, StateGraph
 
 from config import Config
 from core.generator import Generator
@@ -24,16 +23,16 @@ logger = logging.getLogger(__name__)
 
 class AgentState(TypedDict):
     question: str
-    history: Optional[List[Dict[str, str]]]
+    history: list[dict[str, str]] | None
     question_type: Literal["text", "chart", "table", "mixed"]
-    retrieved_chunks: List[str]
-    retrieved_images: List[str]
-    table_data: Optional[Dict[str, Any]]
-    chart_description: Optional[str]
+    retrieved_chunks: list[str]
+    retrieved_images: list[str]
+    table_data: dict[str, Any] | None
+    chart_description: str | None
     final_answer: str
-    citations: Dict[str, str]
+    citations: dict[str, str]
     iteration: int
-    metadata: Dict[str, Any]
+    metadata: dict[str, Any]
 
 
 # ── Classifier ─────────────────────────────────────────────
@@ -98,10 +97,7 @@ def _save_caption_cache(cache):
 
 
 def generate_image_caption(image_path: str) -> str:
-    if not os.path.isabs(image_path):
-        abs_path = os.path.join(Config.DATA_DIR, image_path)
-    else:
-        abs_path = image_path
+    abs_path = os.path.join(Config.DATA_DIR, image_path) if not os.path.isabs(image_path) else image_path
     if not os.path.exists(abs_path):
         return f"[图片缺失: {os.path.basename(abs_path)}]"
     with open(abs_path, "rb") as f:
@@ -173,9 +169,7 @@ def extract_table_from_chunk(chunk_text: str) -> pd.DataFrame:
             if re.match(r"^\|.*\|$", line):
                 in_table = True
                 table_lines.append(line)
-            elif in_table and line.strip() == "":
-                break
-            elif in_table and not re.match(r"^\|.*\|$", line):
+            elif in_table and line.strip() == "" or in_table and not re.match(r"^\|.*\|$", line):
                 break
         if not table_lines:
             return None

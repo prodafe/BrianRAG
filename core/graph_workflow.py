@@ -2,16 +2,17 @@
 LangGraph 工作流定义 - BrianRAG 智能检索生成图
 """
 
-import operator
-from typing import List, Dict, Any, Optional, TypedDict, Annotated
-from langgraph.graph import StateGraph, END
+import logging
+from typing import Any, TypedDict
+
+from langgraph.graph import END, StateGraph
+
 from config import Config
-from core.retriever import HybridRetriever
-from core.reranker import Reranker
 from core.generator import Generator
 from core.graph_builder import GraphBuilder
+from core.reranker import Reranker
+from core.retriever import HybridRetriever
 from core.self_correction import SelfCorrector
-import logging
 
 logger = logging.getLogger(__name__)
 # ---------- 初始化全局组件（复用 pipeline 实例，避免重复加载） ----------
@@ -44,30 +45,30 @@ def ensure_components():
 # ---------- 状态定义 ----------
 class AgentState(TypedDict):
     # 输入输出基本字段
-    messages: List[Dict[str, str]]  # 对话历史
+    messages: list[dict[str, str]]  # 对话历史
     question: str  # 原始问题
     current_query: str  # 当前使用的查询（可能被改写）
     iteration: int  # 当前重试次数
 
     # 检索与重排序结果
-    candidate_chunks: List[str]  # 混合检索原始候选片段
-    candidate_indices: List[int]  # 对应索引
-    final_chunks: List[str]  # 重排序 / 图谱增强后最终片段
-    final_indices: List[int]  # 对应索引
-    used_images: List[List[str]]  # 每个片段关联的图片路径
+    candidate_chunks: list[str]  # 混合检索原始候选片段
+    candidate_indices: list[int]  # 对应索引
+    final_chunks: list[str]  # 重排序 / 图谱增强后最终片段
+    final_indices: list[int]  # 对应索引
+    used_images: list[list[str]]  # 每个片段关联的图片路径
 
     # 生成与评估
     answer: str  # 当前生成的答案
-    citations: Dict[str, str]  # 引用标记 -> 片段内容
+    citations: dict[str, str]  # 引用标记 -> 片段内容
     need_rewrite: bool  # 是否需要改写查询
     score: float  # 评估得分
 
     # 元数据
-    metadata: Dict[str, Any]  # 额外信息（如图谱索引等）
+    metadata: dict[str, Any]  # 额外信息（如图谱索引等）
 
 
 # ---------- 节点函数 ----------
-def retrieve_node(state: AgentState) -> Dict[str, Any]:
+def retrieve_node(state: AgentState) -> dict[str, Any]:
     """检索节点：执行混合检索，获取候选片段"""
     ensure_components()
     query = state["current_query"]
@@ -76,7 +77,7 @@ def retrieve_node(state: AgentState) -> Dict[str, Any]:
     return {"candidate_chunks": chunks, "candidate_indices": indices}
 
 
-def rerank_node(state: AgentState) -> Dict[str, Any]:
+def rerank_node(state: AgentState) -> dict[str, Any]:
     """重排序节点：对候选片段重排序，并可选图谱增强"""
     ensure_components()
     query = state["current_query"]
@@ -129,7 +130,7 @@ def rerank_node(state: AgentState) -> Dict[str, Any]:
     }
 
 
-def generate_node(state: AgentState) -> Dict[str, Any]:
+def generate_node(state: AgentState) -> dict[str, Any]:
     """生成节点：基于最终片段生成答案"""
     ensure_components()
     query = state["current_query"]
@@ -139,7 +140,7 @@ def generate_node(state: AgentState) -> Dict[str, Any]:
     return {"answer": answer, "citations": citations}
 
 
-def evaluate_node(state: AgentState) -> Dict[str, Any]:
+def evaluate_node(state: AgentState) -> dict[str, Any]:
     """评估节点：评估答案质量，决定是否需要改写查询"""
     ensure_components()
     if corrector is None:
@@ -151,7 +152,7 @@ def evaluate_node(state: AgentState) -> Dict[str, Any]:
     return {"need_rewrite": need_rewrite, "score": score, "iteration": iteration}
 
 
-def rewrite_node(state: AgentState) -> Dict[str, Any]:
+def rewrite_node(state: AgentState) -> dict[str, Any]:
     """查询改写节点：生成新的查询字符串"""
     ensure_components()
     new_query = corrector.rewrite_query(state["question"]) if corrector else state["question"]

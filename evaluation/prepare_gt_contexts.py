@@ -1,6 +1,6 @@
 import json
-import sys
 import os
+import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -9,7 +9,7 @@ from core.rag_pipeline import RAGPipeline
 pipeline = RAGPipeline()
 
 # 加载原始测试数据
-with open("data/test.json", "r", encoding="utf-8") as f:
+with open("data/test.json", encoding="utf-8") as f:
     qas = [json.loads(line) for line in f]
 
 # 对每个问题检索，展示前3个候选块，让用户选择哪些是理想上下文

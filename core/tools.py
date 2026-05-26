@@ -1,7 +1,8 @@
 """工具调用模块 — 给 Agent 提供实时计算/搜索/时间能力"""
+
+import logging
 import math
 import re
-import logging
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -85,7 +86,12 @@ def tool_time(arg: str) -> str:
     match = re.match(r"([+-])(\d+)(天|小时|分钟|周)", arg)
     if match:
         sign, num, unit = match.group(1), int(match.group(2)), match.group(3)
-        delta_map = {"天": timedelta(days=num), "小时": timedelta(hours=num), "分钟": timedelta(minutes=num), "周": timedelta(weeks=num)}
+        delta_map = {
+            "天": timedelta(days=num),
+            "小时": timedelta(hours=num),
+            "分钟": timedelta(minutes=num),
+            "周": timedelta(weeks=num),
+        }
         delta = delta_map.get(unit, timedelta())
         if sign == "-":
             delta = -delta

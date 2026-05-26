@@ -1,5 +1,6 @@
 import os
 import sys
+
 import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -11,15 +12,23 @@ def clean_config():
     from config import Config
 
     defaults = {
-        "top_k": 5, "alpha": 0.5, "score_threshold": 0.3,
-        "llm_provider": "ollama", "llm_model": "qwen2.5:7b",
+        "top_k": 5,
+        "alpha": 0.5,
+        "score_threshold": 0.3,
+        "llm_provider": "ollama",
+        "llm_model": "qwen2.5:7b",
         "embedding_model": "bge-m3:latest",
-        "enable_self_correction": True, "enable_rerank": True,
-        "enable_multimodal": True, "enable_graph": True,
-        "enable_cache": True, "enable_hyde": True,
-        "enable_mmr": True, "enable_retrieval_gating": True,
+        "enable_self_correction": True,
+        "enable_rerank": True,
+        "enable_multimodal": True,
+        "enable_graph": True,
+        "enable_cache": True,
+        "enable_hyde": True,
+        "enable_mmr": True,
+        "enable_retrieval_gating": True,
         "enable_semantic_chunking": True,
-        "chunk_size": 800, "chunk_overlap": 100,
+        "chunk_size": 800,
+        "chunk_overlap": 100,
         "gating_score_threshold": 0.35,
     }
     for k, v in defaults.items():

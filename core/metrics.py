@@ -3,11 +3,13 @@ Prometheus 指标收集模块
 用于监控 RAG 系统的请求数、延迟、检索文档数、LLM 调用次数、Token 消耗、缓存命中率等。
 """
 
-from prometheus_client import Counter, Histogram, Gauge, generate_latest, CONTENT_TYPE_LATEST
-from fastapi import Response
 import time
+from collections.abc import Callable
 from functools import wraps
-from typing import Callable, Any
+from typing import Any
+
+from fastapi import Response
+from prometheus_client import CONTENT_TYPE_LATEST, Counter, Gauge, Histogram, generate_latest
 
 # ==================== 指标定义 ====================
 REQUESTS = Counter("rag_requests_total", "Total number of requests", ["endpoint", "mode"])

@@ -1,5 +1,5 @@
 """Generator 模块测试"""
-import pytest
+
 from unittest.mock import MagicMock, patch
 
 
@@ -18,7 +18,7 @@ class TestPromptBuilding:
         gen = Generator()
         chunks = ["信息A。", "信息B。", "信息C。"]
         prompt = gen._build_prompt("测试", chunks)
-        for i, c in enumerate(chunks, 1):
+        for i, _c in enumerate(chunks, 1):
             assert f"[{i}]" in prompt
 
     def test_build_prompt_empty_chunks(self):

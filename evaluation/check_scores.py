@@ -4,8 +4,8 @@
 用法: python scripts/check_scores.py --report logs/evaluation/report.json --threshold 0.7 --metric faithfulness
 """
 
-import json
 import argparse
+import json
 import sys
 
 
@@ -16,7 +16,7 @@ def main():
     parser.add_argument("--threshold", type=float, default=0.7, help="最低可接受分数")
     args = parser.parse_args()
 
-    with open(args.report, "r") as f:
+    with open(args.report) as f:
         report = json.load(f)
 
     score = report.get("scores", {}).get(args.metric)

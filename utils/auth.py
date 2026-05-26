@@ -1,10 +1,8 @@
 """多租户 + RBAC — 轻量级权限系统（Redis 存储）"""
+
 import hashlib
-import json
-import os
 import time
 import uuid
-from typing import Optional
 
 import redis
 
@@ -17,7 +15,7 @@ ROLES = {
     "viewer": ["read"],
 }
 
-_redis_client: Optional[redis.Redis] = None
+_redis_client: redis.Redis | None = None
 
 
 def _r() -> redis.Redis:
@@ -47,12 +45,12 @@ def create_tenant(name: str, admin_email: str = "") -> dict:
     return tenant
 
 
-def get_tenant(tid: str) -> Optional[dict]:
+def get_tenant(tid: str) -> dict | None:
     data = _r().hgetall(f"tenant:{tid}")
     return data if data else None
 
 
-def get_tenant_by_api_key(api_key: str) -> Optional[dict]:
+def get_tenant_by_api_key(api_key: str) -> dict | None:
     tids = _r().smembers("tenants")
     for tid in tids:
         t = _r().hget(f"tenant:{tid}", "api_key")
@@ -91,7 +89,7 @@ def create_user(tenant_id: str, username: str, role: str = "viewer") -> dict:
     return user
 
 
-def get_user(uid: str) -> Optional[dict]:
+def get_user(uid: str) -> dict | None:
     data = _r().hgetall(f"user:{uid}")
     return data if data else None
 
@@ -113,7 +111,7 @@ def delete_user(uid: str) -> bool:
 # ── Permission Check ──
 
 
-def has_permission(api_key: str, action: str) -> tuple[bool, Optional[dict]]:
+def has_permission(api_key: str, action: str) -> tuple[bool, dict | None]:
     """检查 API Key 是否有权执行某操作。返回 (has_perm, tenant_dict)"""
     tenant = get_tenant_by_api_key(api_key)
     if not tenant or not tenant.get("active"):

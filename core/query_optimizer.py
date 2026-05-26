@@ -1,7 +1,7 @@
 # core/query_optimizer.py
 import json
-import random
 import logging
+import random
 from typing import Any
 
 from config import Config
@@ -94,7 +94,7 @@ JSON："""
             import os
 
             syn_path = os.path.join(Config.DATA_DIR, "synonyms.json")
-            with open(syn_path, "r", encoding="utf-8") as f:
+            with open(syn_path, encoding="utf-8") as f:
                 syn_dict = json.load(f)
         except FileNotFoundError:
             return query

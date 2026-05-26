@@ -1,9 +1,9 @@
 """会话管理 — Redis 存储的用户会话/对话历史"""
+
 import json
+import logging
 import time
 import uuid
-import logging
-from typing import Optional
 
 import redis
 
@@ -32,7 +32,7 @@ class SessionManager:
         self.redis.zadd("sessions", {sid: time.time()})
         return session
 
-    def get_session(self, sid: str) -> Optional[dict]:
+    def get_session(self, sid: str) -> dict | None:
         data = self.redis.get(f"session:{sid}")
         if not data:
             return None
@@ -71,7 +71,7 @@ class SessionManager:
 
 
 # 单例
-_session_mgr: Optional[SessionManager] = None
+_session_mgr: SessionManager | None = None
 
 
 def get_session_manager() -> SessionManager:

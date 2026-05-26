@@ -1,12 +1,11 @@
-import re
 import logging
 import os
 import pickle
+from difflib import SequenceMatcher
 from typing import Any
 
 import networkx as nx
 import pandas as pd
-from difflib import SequenceMatcher
 
 from config import Config
 

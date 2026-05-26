@@ -1,36 +1,35 @@
-import sys
-import os
 import hashlib
 import json
-import re
-import time
 import logging
-from typing import List, Dict, Any, Tuple
+import os
+import re
+import sys
+import time
 from concurrent.futures import ThreadPoolExecutor
 from difflib import SequenceMatcher
 
-import redis
+logger = logging.getLogger(__name__)
 
 import jieba  # 用于分词生成高亮词
+import redis
 
-from core.retriever import HybridRetriever
+from config import Config
 from core.generator import Generator
 from core.graph_builder import GraphBuilder
-from core.reranker import Reranker
-from config import Config
-from core.self_correction import SelfCorrector
-from core.query_optimizer import QueryOptimizer
-from utils.hot_question_tracker import record_question
 
 # METRICS: 导入指标记录函数
 from core.metrics import (
-    record_retrieval,
-    record_llm_call,
     record_cache_hit,
     record_cache_miss,
+    record_llm_call,
+    record_retrieval,
     record_vision_call,
-    update_active_tasks,
 )
+from core.query_optimizer import QueryOptimizer
+from core.reranker import Reranker
+from core.retriever import HybridRetriever
+from core.self_correction import SelfCorrector
+from utils.hot_question_tracker import record_question
 
 # 添加项目根目录到路径
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -60,7 +59,7 @@ logger = logging.getLogger(__name__)
 
 # 多模态智能体导入
 try:
-    from core.agents import agent_app, AgentState
+    from core.agents import AgentState, agent_app
 
     MULTIMODAL_AVAILABLE = True
 except ImportError:
@@ -113,7 +112,7 @@ class RAGPipeline:
             return "procedure"
         return "general"
 
-    def _adjust_params_by_intent(self, intent: str) -> Tuple[float, bool]:
+    def _adjust_params_by_intent(self, intent: str) -> tuple[float, bool]:
         """根据意图返回 (alpha, enable_multimodal)"""
         if intent == "definition":
             return 0.7, False
@@ -134,7 +133,7 @@ class RAGPipeline:
             h.update(hist_str.encode())
         return f"rag:query:{h.hexdigest()}"
 
-    def _generate_highlight_terms(self, question: str) -> List[str]:
+    def _generate_highlight_terms(self, question: str) -> list[str]:
         """生成用于前端高亮的关键词列表"""
         terms = set()
         # 1. 原始问题分词
@@ -276,7 +275,7 @@ class RAGPipeline:
             futures = {executor.submit(self.retriever.hybrid_search, q, top_k_per_query): q for q in queries}
             for future in futures:
                 chunks, indices = future.result()
-                for chunk, idx in zip(chunks, indices):
+                for chunk, idx in zip(chunks, indices, strict=False):
                     if chunk not in seen:
                         seen.add(chunk)
                         all_chunks.append(chunk)
@@ -284,8 +283,8 @@ class RAGPipeline:
         return all_chunks, all_indices
 
     def _mmr_reorder(
-        self, query: str, chunks: List[str], indices: List[int], lambda_param: float = 0.7, top_k: int = None
-    ) -> Tuple[List[str], List[int]]:
+        self, query: str, chunks: list[str], indices: list[int], lambda_param: float = 0.7, top_k: int = None
+    ) -> tuple[list[str], list[int]]:
         """
         使用MMR算法重新排序，平衡相关性与多样性。
         lambda_param: 相关性权重（1-λ为多样性权重），越大越相关，越小越多样。
@@ -298,8 +297,8 @@ class RAGPipeline:
 
         # 尝试导入 sklearn 计算余弦相似度
         try:
+            import numpy as _np  # noqa: F401
             from sklearn.metrics.pairwise import cosine_similarity
-            import numpy as np
         except ImportError:
             logger.warning("scikit-learn 未安装，跳过 MMR 重排")
             return chunks[:top_k], indices[:top_k]
@@ -321,10 +320,7 @@ class RAGPipeline:
         while len(selected) < top_k and remaining:
             mmr_scores = []
             for i in remaining:
-                if selected:
-                    max_sim = max(sim_matrix[i][j] for j in selected)
-                else:
-                    max_sim = 0
+                max_sim = max(sim_matrix[i][j] for j in selected) if selected else 0
                 mmr = lambda_param * sim_query[i] - (1 - lambda_param) * max_sim
                 mmr_scores.append(mmr)
             best_idx = remaining[mmr_scores.index(max(mmr_scores))]
@@ -355,7 +351,7 @@ class RAGPipeline:
             deduped_chunks = []
             deduped_indices = []
             seen_signatures = set()
-            for ck, ci in zip(candidate_chunks, candidate_indices):
+            for ck, ci in zip(candidate_chunks, candidate_indices, strict=False):
                 sig = hashlib.md5(ck[:80].encode()).hexdigest()
                 if sig not in seen_signatures:
                     seen_signatures.add(sig)
@@ -423,7 +419,7 @@ class RAGPipeline:
                     merged_chunks = candidate_chunks + new_chunks
                     merged_indices = candidate_indices + new_indices
                     unique = {}
-                    for c, idx in zip(merged_chunks, merged_indices):
+                    for c, idx in zip(merged_chunks, merged_indices, strict=False):
                         if c not in unique:
                             unique[c] = idx
                     merged_chunks = list(unique.keys())
@@ -458,7 +454,7 @@ class RAGPipeline:
 
         # 虚拟索引映射
         virtual_meta_map = {}
-        for ck, ci in zip(candidate_chunks, candidate_indices):
+        for ck, ci in zip(candidate_chunks, candidate_indices, strict=False):
             if ci >= len(self.retriever.chunks) and isinstance(ck, str):
                 match = re.search(r"!\[.*?\]\((.*?)\)", ck)
                 if match:
@@ -472,7 +468,7 @@ class RAGPipeline:
                 else:
                     virtual_meta_map[ci] = {"type": "image", "caption": "图片", "description": ck}
 
-        for idx, chunk in zip(all_indices, all_chunks):
+        for idx, chunk in zip(all_indices, all_chunks, strict=False):
             if idx in virtual_meta_map:
                 meta = virtual_meta_map[idx]
             elif idx < len(self.retriever.chunk_metadata):
@@ -520,7 +516,7 @@ class RAGPipeline:
         for attempt in range(getattr(Config, "GATING_MAX_RETRIES", 2)):
             if attempt == 0:
                 # 策略1：放宽检索范围，用更宽的参数重试
-                logger.info(f"降级策略1/2: 放宽检索范围")
+                logger.info("降级策略1/2: 放宽检索范围")
                 expanded_chunks, expanded_indices = self.retriever.hybrid_search(query, top_k=Config.TOP_K * 5)
                 if expanded_chunks and len(expanded_chunks) >= Config.TOP_K:
                     t, ti, ui, ei, lc, score = self._retrieve_and_rerank(
@@ -532,7 +528,7 @@ class RAGPipeline:
 
             elif attempt == 1:
                 # 策略2：HyDE 生成假设文档后重新检索
-                logger.info(f"降级策略2/2: HyDE 假设文档检索")
+                logger.info("降级策略2/2: HyDE 假设文档检索")
                 try:
                     hyde_doc = self.query_optimizer.hyde_document(query)
                     if hyde_doc:
@@ -548,7 +544,7 @@ class RAGPipeline:
                     logger.warning(f"HyDE降级失败: {e}")
 
         # 所有降级策略失败 → 标记知识缺口
-        logger.warning(f"所有降级策略失败，标记为知识缺口")
+        logger.warning("所有降级策略失败，标记为知识缺口")
         return text_chunks, text_indices, used_images, extra_indices, llm_context, True
 
     def _write_cache(self, key: str, result: dict):
@@ -627,7 +623,7 @@ class RAGPipeline:
             prewarm = PrewarmEngine(pipeline=self)
             prewarm_hit = prewarm.find_similar(question)
             if prewarm_hit and prewarm_hit.get("answer") and len(prewarm_hit["answer"]) > 20:
-                logger.info(f"命中预训练缓存，快速返回")
+                logger.info("命中预训练缓存，快速返回")
                 record_cache_hit()
                 return {
                     "question": question,
@@ -961,7 +957,9 @@ class RAGPipeline:
             "suggestion": suggestion,
         }
 
-    def multimodal_query(self, query: str, history: List[dict] = []) -> dict:
+    def multimodal_query(self, query: str, history: list[dict] = None) -> dict:
+        if history is None:
+            history = []
         if not self.retriever or not self.retriever.clip_retriever:
             logger.warning("多模态检索未启用，回退到普通RAG")
             return self.query(query, history)
@@ -983,11 +981,7 @@ class RAGPipeline:
 
         used_images = []
         for meta in all_metas:
-            if meta.get("type") == "image":
-                url = meta.get("image_url", "")
-                if url:
-                    used_images.append({"image_url": url, "caption": meta.get("original_filename", "图片")})
-            elif meta.get("image_path"):
+            if meta.get("type") == "image" or meta.get("image_path"):
                 url = meta.get("image_url", "")
                 if url:
                     used_images.append({"image_url": url, "caption": meta.get("original_filename", "图片")})

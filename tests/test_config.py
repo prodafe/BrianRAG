@@ -1,6 +1,4 @@
 """Config 模块测试"""
-import os
-import pytest
 
 
 class TestConfigDefaults:
@@ -16,11 +14,11 @@ class TestConfigDefaults:
     def test_uppercase_read_compat(self):
         from config import Config
 
-        assert Config.TOP_K == Config.top_k
-        assert Config.ALPHA == Config.alpha
-        assert Config.LLM_MODEL == Config.llm_model
-        assert Config.EMBEDDING_MODEL == Config.embedding_model
-        assert Config.ENABLE_RERANK == Config.enable_rerank
+        assert Config.top_k == Config.TOP_K
+        assert Config.alpha == Config.ALPHA
+        assert Config.llm_model == Config.LLM_MODEL
+        assert Config.embedding_model == Config.EMBEDDING_MODEL
+        assert Config.enable_rerank == Config.ENABLE_RERANK
 
     def test_mutation(self):
         from config import Config
@@ -35,8 +33,13 @@ class TestConfigDefaults:
         from config import Config
 
         for field in [
-            "enable_graph", "enable_multimodal", "enable_self_correction",
-            "enable_cache", "enable_hyde", "enable_mmr", "enable_rerank",
+            "enable_graph",
+            "enable_multimodal",
+            "enable_self_correction",
+            "enable_cache",
+            "enable_hyde",
+            "enable_mmr",
+            "enable_rerank",
         ]:
             assert isinstance(getattr(Config, field), bool), f"{field} should be bool"
 
@@ -68,6 +71,7 @@ class TestConfigDefaults:
 
         try:
             from pydantic_settings import BaseSettings  # noqa: F401
+
             # pydantic-settings 在初始化时读取环境变量，已存在的 Config 不会自动重新加载
             # 此测试验证 env var 存在但需要新实例才能看到变化
             assert Config.top_k >= 1  # 至少是个正数

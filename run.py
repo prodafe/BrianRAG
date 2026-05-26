@@ -1,6 +1,13 @@
 #!/usr/bin/env python
 """BrianRAG — Enterprise Knowledge Engine"""
-import sys, os, webbrowser, time, threading
+
+import contextlib
+import os
+import sys
+import threading
+import time
+import webbrowser
+
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 if __name__ == "__main__":
@@ -14,17 +21,20 @@ if __name__ == "__main__":
   ║     Enterprise Knowledge Engine          ║
   ╠══════════════════════════════════════════╣
   ║  Local  : {url:<30} ║
-  ║  API    : {url}/api/health{'':<22} ║
+  ║  API    : {url}/api/health{"":<22} ║
   ║  Ctrl+C : stop                          ║
   ╚══════════════════════════════════════════╝
 """)
 
     def _open():
         time.sleep(1.5)
-        try: webbrowser.open(url)
-        except: pass
+        with contextlib.suppress(Exception):
+            webbrowser.open(url)
+
     threading.Thread(target=_open, daemon=True).start()
 
     import uvicorn
+
     from api.main import app
+
     uvicorn.run(app, host=host, port=port, log_level="warning")

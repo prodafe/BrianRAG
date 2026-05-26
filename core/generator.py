@@ -1,9 +1,10 @@
 import hashlib
-import pickle
-import os
-import re
 import json
-from typing import Any, Iterator
+import os
+import pickle
+import re
+from collections.abc import Iterator
+from typing import Any
 
 from config import Config
 
@@ -25,7 +26,7 @@ class Generator:
         """加载 Few-shot 示例库"""
         examples_file = os.path.join(Config.DATA_DIR, "few_shot_examples.json")
         if os.path.exists(examples_file):
-            with open(examples_file, "r", encoding="utf-8") as f:
+            with open(examples_file, encoding="utf-8") as f:
                 return json.load(f)
         return {}
 
@@ -63,15 +64,16 @@ class Generator:
             return
         cls._feedback_seeded = True
         try:
-            import redis as _rds
             import json as _json
+
+            import redis as _rds
 
             rc = _rds.Redis(host="localhost", port=6379, db=0, decode_responses=True)
             if rc.exists("feedback:negative"):
                 return
             fb_file = os.path.join(Config.BASE_DIR, "feedback.jsonl")
             if os.path.exists(fb_file):
-                with open(fb_file, "r", encoding="utf-8") as f:
+                with open(fb_file, encoding="utf-8") as f:
                     for line in f:
                         entry = _json.loads(line.strip())
                         if entry.get("feedback") == "negative":
@@ -83,8 +85,9 @@ class Generator:
         """检查类似问题是否收到过 negative 反馈，返回增强指令"""
         self._seed_feedback()
         try:
-            import redis as _rds
             from difflib import SequenceMatcher
+
+            import redis as _rds
 
             rc = _rds.Redis(host="localhost", port=6379, db=0, decode_responses=True)
             all_neg = rc.hgetall("feedback:negative")
@@ -184,6 +187,7 @@ class Generator:
         # 检测并执行工具调用
         if "[TOOL:" in answer:
             from core.tools import execute_tool_call
+
             tool_result = execute_tool_call(answer)
             if tool_result and not tool_result.startswith("未知工具") and not tool_result.startswith("工具调用失败"):
                 enriched = [f"[工具返回] {tool_result}"] + context_chunks
@@ -224,9 +228,8 @@ class Generator:
         prompt = self._build_prompt(question, chunks, history, intent)
 
         try:
-            for token in self._llm.chat_stream(
+            yield from self._llm.chat_stream(
                 [{"role": "user", "content": prompt}], options={"temperature": 0.1, "top_p": 0.9}
-            ):
-                yield token
+            )
         except Exception as e:
             yield f"生成答案时出错：{e}"

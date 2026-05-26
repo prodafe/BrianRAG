@@ -1,9 +1,10 @@
 # evaluation/ragas_evaluator.py
 import pandas as pd
-from ragas import evaluate
-from ragas.metrics import faithfulness, answer_relevancy, context_precision, context_recall
-from ragas.llms import LangchainLLMWrapper
 from langchain_community.chat_models import ChatOllama
+from ragas import evaluate
+from ragas.llms import LangchainLLMWrapper
+from ragas.metrics import answer_relevancy, context_precision, context_recall, faithfulness
+
 from config import Config
 from core.rag_pipeline import RAGPipeline
 

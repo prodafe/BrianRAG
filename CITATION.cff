@@ -1,0 +1,20 @@
+cff-version: 1.2.0
+title: BrianRAG
+message: "如果这个项目对你的研究有帮助，请引用它。"
+type: software
+authors:
+  - given-names: Brian
+repository-code: "https://github.com/prodafe/BrianRAG"
+url: "https://github.com/prodafe/BrianRAG"
+abstract: "Enterprise Knowledge Engine — 本地优先、功能完备的 RAG 知识库问答系统。混合检索（BM25 + 向量 + 知识图谱 RRF）、PDF 版式分析、OCR 扫描件支持、多租户 RBAC、工具调用。"
+keywords:
+  - RAG
+  - retrieval-augmented-generation
+  - knowledge-base
+  - LLM
+  - Ollama
+  - pgvector
+  - FastAPI
+license: Apache-2.0
+version: 2.0.0
+date-released: "2026-05-26"

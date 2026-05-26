@@ -282,9 +282,31 @@ brianrag/
 
 ---
 
-## 许可证
+## 开源
 
-自研代码使用 Apache 2.0 许可证。依赖的第三方库遵循各自协议。
+本项目基于 **Apache 2.0** 许可证开源。
+
+### 参与贡献
+
+欢迎任何形式的贡献！请先阅读 [CONTRIBUTING.md](CONTRIBUTING.md)。
+
+- 🐛 [提交 Bug](https://github.com/prodafe/BrianRAG/issues/new?template=bug_report.yml)
+- 💡 [建议功能](https://github.com/prodafe/BrianRAG/issues/new?template=feature_request.yml)
+- 🔀 Fork → Feature Branch → Pull Request
+
+### 引用
+
+如果这个项目对你的研究有帮助，请引用：
+
+```bibtex
+@software{BrianRAG,
+  author = {Brian},
+  title = {BrianRAG: Enterprise Knowledge Engine},
+  year = {2026},
+  version = {2.0.0},
+  url = {https://github.com/prodafe/BrianRAG}
+}
+```
 
 ## 致谢
 

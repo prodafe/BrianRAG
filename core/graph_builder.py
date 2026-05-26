@@ -1,19 +1,30 @@
 import re
-import networkx as nx
-import ollama
-from config import Config
+import logging
 import os
 import pickle
+from typing import Any
+
+import networkx as nx
 import pandas as pd
 from difflib import SequenceMatcher
 
-class GraphBuilder:
-    def __init__(self):
-        self.graph = nx.Graph()
-        self.entity_to_chunks = {}   # 实体 -> 文本块索引列表
-        self.client = ollama.Client(host=Config.OLLAMA_BASE_URL)
+from config import Config
 
-    def extract_triples(self, text: str) -> list[tuple]:
+logger = logging.getLogger(__name__)
+
+
+class GraphBuilder:
+    def __init__(self) -> None:
+        self.graph: nx.Graph = nx.Graph()
+        self.entity_to_chunks: dict[str, set[int]] = {}
+
+    @property
+    def _llm(self) -> Any:
+        from core.llm_provider import get_llm_provider
+
+        return get_llm_provider()
+
+    def extract_triples(self, text: str) -> list[tuple[str, str, str]]:
         prompt = f"""你是一个专业的信息抽取助手。请从以下文本中提取所有 (实体1, 关系, 实体2) 三元组。关系应当是一个简短的动词短语或名词性短语。每个三元组一行，格式为：实体1|关系|实体2。如果文本中没有明确的三元组，只输出“无”。
 
     文本：
@@ -25,9 +36,11 @@ class GraphBuilder:
 
     现在开始输出："""
         try:
-            resp = self.client.generate(model=Config.TRIPLE_EXTRACT_MODEL, prompt=prompt, options={'temperature': 0, 'num_predict': 512})
-            raw = resp["response"].strip()
-            print(f"[DEBUG] 模型输出: {raw}")  # 调试时保留
+            resp = self._llm.generate(
+                model=Config.TRIPLE_EXTRACT_MODEL, prompt=prompt, options={"temperature": 0, "num_predict": 512}
+            )
+            raw = resp.strip()
+            logger.debug(f"模型输出: {raw}")
             lines = raw.split("\n")
             triples = []
             for line in lines:
@@ -37,7 +50,7 @@ class GraphBuilder:
                         triples.append(tuple(p.strip() for p in parts))
             return triples
         except Exception as e:
-            print(f"三元组提取失败: {e}")
+            logger.warning(f"三元组提取失败: {e}")
             return []
 
     def add_chunk(self, chunk_text: str, chunk_idx: int):
@@ -78,7 +91,7 @@ class GraphBuilder:
         for i, node1 in enumerate(nodes):
             if node1 in merged:
                 continue
-            for node2 in nodes[i+1:]:
+            for node2 in nodes[i + 1 :]:
                 if node2 in merged:
                     continue
                 if self._similar(node1, node2, threshold):
@@ -103,7 +116,7 @@ class GraphBuilder:
             import splink.comparison_library as cl
             from splink import Linker
         except ImportError:
-            print("Splink 未安装，无法使用高级规范化")
+            logger.warning("Splink 未安装，无法使用高级规范化")
             raise
 
         nodes = list(self.graph.nodes())
@@ -113,22 +126,14 @@ class GraphBuilder:
         df = pd.DataFrame({"entity_name": nodes})
         settings = {
             "link_type": "dedupe_only",
-            "blocking_rules_to_generate_predictions": [
-                Config.SPLINK_BLOCKING_RULE
-            ],
+            "blocking_rules_to_generate_predictions": [Config.SPLINK_BLOCKING_RULE],
             "comparisons": [
-                cl.LevenshteinAtThresholds(
-                    "entity_name",
-                    threshold=Config.SPLINK_COMPARISON_LEVELS
-                ),
-                cl.JaroWinklerAtThresholds(
-                    "entity_name",
-                    threshold=Config.SPLINK_JARO_WINKLER_THRESHOLDS
-                )
+                cl.LevenshteinAtThresholds("entity_name", threshold=Config.SPLINK_COMPARISON_LEVELS),
+                cl.JaroWinklerAtThresholds("entity_name", threshold=Config.SPLINK_JARO_WINKLER_THRESHOLDS),
             ],
             "retain_intermediate_calculation_columns": False,
             "max_iterations": 10,
-            "em_convergence": 0.01
+            "em_convergence": 0.01,
         }
         linker = Linker(df, settings, db_api="duckdb")
         df_predict = linker.predict().as_pandas_dataframe()
@@ -154,16 +159,16 @@ class GraphBuilder:
         """实体规范化入口：优先 Splink，失败则回退到简单相似度"""
         try:
             self._normalize_by_splink()
-            print("实体规范化完成 (Splink)")
+            logger.info("实体规范化完成 (Splink)")
         except Exception as e:
-            print(f"Splink 规范化失败: {e}，回退到简单相似度方法")
+            logger.warning(f"Splink 规范化失败: {e}，回退到简单相似度方法")
             self._normalize_simple()
 
     # ------ 加载 / 保存 ------
     def load(self):
         if os.path.exists(Config.GRAPH_FILE):
             try:
-                with open(Config.GRAPH_FILE, 'rb') as f:
+                with open(Config.GRAPH_FILE, "rb") as f:
                     data = pickle.load(f)
                 if isinstance(data, tuple):
                     self.graph, self.entity_to_chunks = data
@@ -172,7 +177,7 @@ class GraphBuilder:
                     self.entity_to_chunks = {}
                 return True
             except Exception as e:
-                print(f"加载图谱失败: {e}")
+                logger.warning(f"加载图谱失败: {e}")
                 return False
         return False
 
@@ -180,8 +185,8 @@ class GraphBuilder:
     def retrieve_by_entities(self, query: str, top_k=3) -> list[int]:
         prompt = f"从以下问题中提取出最重要的实体名词，只输出实体，多个用逗号分隔。不要输出其他内容。\n问题：{query}"
         try:
-            resp = self.client.generate(model=Config.LLM_MODEL, prompt=prompt)
-            entities = [e.strip() for e in resp["response"].split(",") if e.strip()]
+            resp = self._llm.generate(model=Config.LLM_MODEL, prompt=prompt)
+            entities = [e.strip() for e in resp.split(",") if e.strip()]
         except Exception:
             entities = []
         if not entities:
@@ -197,8 +202,8 @@ class GraphBuilder:
     def retrieve_by_entities_with_hops(self, query: str, hops: int = 1, top_k: int = 3) -> list[int]:
         prompt = f"从以下问题中提取出最重要的实体名词，只输出实体，多个用逗号分隔。不要输出其他内容。\n问题：{query}"
         try:
-            resp = self.client.generate(model=Config.TRIPLE_EXTRACT_MODEL, prompt=prompt)
-            entities = [e.strip() for e in resp["response"].split(",") if e.strip()]
+            resp = self._llm.generate(model=Config.TRIPLE_EXTRACT_MODEL, prompt=prompt)
+            entities = [e.strip() for e in resp.split(",") if e.strip()]
         except Exception:
             entities = []
         if not entities:
@@ -228,6 +233,7 @@ class GraphBuilder:
     # ------ 可视化 ------
     def to_html(self, output_path: str = "knowledge_graph.html"):
         from pyvis.network import Network
+
         net = Network(height="600px", width="100%", bgcolor="#ffffff", font_color="black")
         for node in self.graph.nodes():
             net.add_node(node, label=node, title=node)

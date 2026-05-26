@@ -58,10 +58,13 @@
 redis-server
 
 # 启动 Celery Worker（需先激活虚拟环境）
-celery -A tasks worker --loglevel=info --pool=threads --concurrency=2
+celery -A tasks worker --pool=threads -l info -c 8
 
 # 启动 FastAPI
-uvicorn api.main:app --reload --port 8000
+python api/main.py
 
 # 启动 Streamlit
 streamlit run webui/app.py
+
+# 启动数据库
+pg_ctl start -D "D:\Pdb\postgresql-18.3-3-windows-x64-binaries\pgsql\data"

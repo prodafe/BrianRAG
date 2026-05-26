@@ -1,0 +1,44 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+*.egg-info/
+dist/
+build/
+eggs/
+.eggs/
+
+# Virtual environment
+.venv/
+venv/
+env/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Project cache & data
+cache/
+index/
+logs/
+lib/
+data/uploads/
+data/images/
+
+# Environment
+.env
+.env.local
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Data files (not code)
+*.jsonl
+*.pkl
+*.gpickle
+
+# Logs
+*.log

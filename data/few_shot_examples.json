@@ -1,0 +1,11 @@
+{
+    "formula": [
+        {"question": "FN1 如何计算？", "answer": "FN1 = (Δ+σ)·nk，其中 Δ 为弹簧形变量，σ 为预压量。"}
+    ],
+    "definition": [
+        {"question": "什么是减震结构？", "answer": "减震结构是吸收路面冲击、保护AMR的机械装置。"}
+    ],
+    "question": "系统架构图是什么样？",
+    "answer": "系统架构如下：\n\n![系统架构图](/images/architecture.png)\n\n该图展示了前端、后端和数据库的交互关系。",
+    "contexts": ["...包含图片引用的上下文..."]
+}

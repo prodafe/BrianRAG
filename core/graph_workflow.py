@@ -12,6 +12,7 @@ from core.generator import Generator
 from core.graph_builder import GraphBuilder
 from core.self_correction import SelfCorrector
 import logging
+
 logger = logging.getLogger(__name__)
 # ---------- 初始化全局组件（复用 pipeline 实例，避免重复加载） ----------
 retriever = None
@@ -72,10 +73,7 @@ def retrieve_node(state: AgentState) -> Dict[str, Any]:
     query = state["current_query"]
     candidate_count = min(20, Config.TOP_K * Config.RERANK_CANDIDATE_MULTIPLIER)
     chunks, indices = retriever.hybrid_search(query, top_k=candidate_count)
-    return {
-        "candidate_chunks": chunks,
-        "candidate_indices": indices
-    }
+    return {"candidate_chunks": chunks, "candidate_indices": indices}
 
 
 def rerank_node(state: AgentState) -> Dict[str, Any]:
@@ -86,11 +84,7 @@ def rerank_node(state: AgentState) -> Dict[str, Any]:
     cand_indices = state["candidate_indices"]
 
     if not cand_chunks:
-        return {
-            "final_chunks": [],
-            "final_indices": [],
-            "used_images": []
-        }
+        return {"final_chunks": [], "final_indices": [], "used_images": []}
 
     # 重排序
     if reranker is not None:
@@ -98,8 +92,8 @@ def rerank_node(state: AgentState) -> Dict[str, Any]:
         final_chunks = [text for _, _, text in reranked]
         final_indices = [cand_indices[idx] for _, idx, _ in reranked]
     else:
-        final_chunks = cand_chunks[:Config.TOP_K]
-        final_indices = cand_indices[:Config.TOP_K]
+        final_chunks = cand_chunks[: Config.TOP_K]
+        final_indices = cand_indices[: Config.TOP_K]
 
     # 图谱增强（可选）
     extra_indices = []
@@ -109,6 +103,7 @@ def rerank_node(state: AgentState) -> Dict[str, Any]:
         extra_chunks = [retriever.chunks[i] for i in extra_indices if i < len(retriever.chunks)]
         # 相似度去重
         from difflib import SequenceMatcher
+
         def is_similar(a, b, thresh=0.95):
             return SequenceMatcher(None, a, b).ratio() > thresh
 
@@ -130,7 +125,7 @@ def rerank_node(state: AgentState) -> Dict[str, Any]:
         "final_chunks": final_chunks,
         "final_indices": final_indices,
         "used_images": used_images,
-        "metadata": {"extra_indices": extra_indices}
+        "metadata": {"extra_indices": extra_indices},
     }
 
 
@@ -150,19 +145,10 @@ def evaluate_node(state: AgentState) -> Dict[str, Any]:
     if corrector is None:
         return {"need_rewrite": False, "score": 1.0, "iteration": state["iteration"] + 1}
 
-    score = corrector.evaluate_answer(
-        state["question"],
-        state["answer"],
-        state["final_chunks"]
-    )
+    score = corrector.evaluate_answer(state["question"], state["answer"], state["final_chunks"])
     iteration = state["iteration"] + 1
-    need_rewrite = (score < Config.SELF_CORRECTION_SCORE_THRESHOLD and
-                    iteration <= Config.SELF_CORRECTION_MAX_RETRIES)
-    return {
-        "need_rewrite": need_rewrite,
-        "score": score,
-        "iteration": iteration
-    }
+    need_rewrite = score < Config.SELF_CORRECTION_SCORE_THRESHOLD and iteration <= Config.SELF_CORRECTION_MAX_RETRIES
+    return {"need_rewrite": need_rewrite, "score": score, "iteration": iteration}
 
 
 def rewrite_node(state: AgentState) -> Dict[str, Any]:
@@ -200,10 +186,7 @@ def build_graph() -> StateGraph:
     workflow.add_edge("retrieve", "rerank")
     workflow.add_edge("rerank", "generate")
     workflow.add_edge("generate", "evaluate")
-    workflow.add_conditional_edges("evaluate", should_continue, {
-        "rewrite": "rewrite",
-        "end": END
-    })
+    workflow.add_conditional_edges("evaluate", should_continue, {"rewrite": "rewrite", "end": END})
     workflow.add_edge("rewrite", "retrieve")
 
     return workflow.compile()

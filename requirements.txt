@@ -1,37 +1,69 @@
-# Core dependencies for TinyRAG
-streamlit>=1.28.0
-sentence-transformers>=2.2.2
-faiss-cpu>=1.7.4
+# BrianRAG — Core Dependencies
+# Python 3.10+
+
+# Web Framework
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.0
+pydantic>=2.0
+pydantic-settings>=2.5.0
+
+# Database & Vector Store
+sqlalchemy>=2.0
+psycopg[binary]>=3.2
+pgvector>=0.3
+langchain-postgres>=0.0.13
+
+# Cache & Queue
+redis[hiredis]>=5.1
+celery>=5.4
+
+# Retrieval
 rank-bm25>=0.2.2
-langchain-community>=0.0.20
-langchain-core>=0.1.0
-pypdf>=3.17.0
-ollama>=0.1.6
-numpy>=1.24.0
+faiss-cpu>=1.8.0
+sentence-transformers>=3.0.0
 
-# Optional for graph and visualization
-networkx>=3.0
-pyvis>=0.3.2
+# LLM Clients
+ollama>=0.4.0
+httpx>=0.27.0
 
-# For better text processing
-tiktoken>=0.5.0
-langchain-classic
-pandas
-camelot-py
-chardet
-langchain
-fitz
-python-docx
-jieba3k
-transformers
-torch
-langgraph
-config
-ragas
-sqlalchemy
-langchain-postgres
-splink
-celery
-fastapi
-pydantic
-booktype
+# Document Loading
+pypdf>=5.0
+PyMuPDF>=1.24.0
+python-docx>=1.1.0
+unstructured>=0.15.0
+python-magic-bin>=0.4.14  # Windows only (required by unstructured)
+
+# Text Processing
+jieba>=0.42.1
+tiktoken>=0.7.0
+numpy>=1.26.0
+
+# Knowledge Graph
+networkx>=3.3
+splink>=4.0
+
+# Evaluation & Quality
+ragas>=0.2.0
+scikit-learn>=1.5.0
+
+# Agentic
+langchain-core>=0.3.0
+langchain-community>=0.3.0
+langgraph>=0.2.0
+
+# Observability & Scheduling
+apscheduler>=3.10
+watchdog>=5.0
+slowapi>=0.1.9
+
+# Utils
+transformers>=4.45.0
+torch>=2.4.0
+pandas>=2.2
+pillow>=10.4
+chardet>=5.2
+
+# OCR (optional — uncomment to install)
+# paddlepaddle>=3.0  # required by paddleocr, install separately
+# paddleocr>=2.9
+# pytesseract>=0.3

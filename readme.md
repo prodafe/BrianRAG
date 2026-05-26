@@ -1,339 +1,257 @@
-# **BrianRAG**
-## 项目开发者：Brian
-（以下是作者本人，不接受反驳）
+# BrianRAG
 
-![作者本人帅照.jpg](webui/assets/%E4%BD%9C%E8%80%85%E6%9C%AC%E4%BA%BA%E5%B8%85%E7%85%A7.jpg)
+**Enterprise Knowledge Engine** — 本地优先、功能完备的 RAG 知识库问答系统。
 
-https://img.shields.io/badge/python-3.10%252B-blue
+[![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/)
+[![License](https://img.shields.io/badge/License-Apache%202.0-green.svg)](https://www.apache.org/licenses/LICENSE-2.0)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688)](https://fastapi.tiangolo.com/)
+[![Ollama](https://img.shields.io/badge/Ollama-native-000000)](https://ollama.com/)
 
-https://img.shields.io/badge/License-Apache%25202.0-green.svg
+<p align="center">
+  <img src="frontend/Brian.png" alt="BrianRAG" width="180">
+</p>
 
-https://img.shields.io/badge/Streamlit-1.30+-red
+混合检索（BM25 + 向量 + 知识图谱 RRF）· 多模态理解 · ReAct Agent · 自我修正 · 预训练缓存 · GitHub 数据源 · RAGAS 评估回路。全部在本地运行，零云端依赖。
 
-https://img.shields.io/badge/LangGraph-0.2.0+-orange
+---
 
-BrianRAG 是一个功能完备、可扩展的企业级本地知识库问答系统。它基于 RAG（检索增强生成） 架构，支持多格式文档、混合检索、知识图谱、多模态智能体、自我修正、异步索引、用户反馈闭环以及超参数自动调优等高级特性。所有处理均在本地完成，确保数据隐私与安全。
+## 快速开始
 
-## 🔗 GitHub 仓库 | 📖 在线文档 | 🐛 问题反馈
+### 环境要求
 
-#### ✨ 核心特性
+- Python 3.10+
+- PostgreSQL 15+ with pgvector
+- Redis（可选，用于缓存）
+- [Ollama](https://ollama.com/) 已安装并运行
 
-📄 多格式文档支持：txt, pdf, md, docx, html, csv, 图片（jpg, png等）……
+### 1. 克隆并安装
 
-🔍 混合检索：BM25 关键词 + FAISS 向量检索，可调节权重 α
-
-📊 知识图谱增强：自动提取实体关系，支持多跳推理与实体规范化
-
-🖼️ 多模态理解：图文混合问答，支持表格/图表解析（Qwen2.5-VL）
-
-🤖 智能体模式：基于 LangGraph 的自主决策与工具调用
-
-🔄 自我修正：答案质量自评，低分时自动改写查询并重试
-
-⚡ 异步索引：后台构建索引，前端不阻塞，实时进度条
-
-👥 用户反馈闭环：👍/👎 按钮 + 评语，记录到 feedback.jsonl
-
-🎛️ 超参数自动调优：基于 RAGAS 评估的离线参数搜索
-
-🧩 语义缓存：相同问题秒级响应
-
-🎨 可视化知识图谱：交互式实体关系图（pyvis）
-
-🧪 可观测性：节点耗时日志、性能埋点、Prometheus 指标（可选）
-
-🐳 数据库 PostgreSQL + pgvector（生产就绪）
-
-🎨  FastAPI + Celery + Redis 
-
-🧪 无状态检索器（每次检索实时同步数据库）,结构化元数据增强,查询意图识别与动态权重调整
-
-🎛️ 完整的降级与容错机制,持久化与恢复,高级检索调试能力
-
-🚀 快速开始
-
-1️⃣ 环境要求
-Python 3.10 – 3.11（推荐 3.10）
-
-至少 16GB 内存（建议 32GB）
-
-NVIDIA GPU（可选，推荐 8GB 以上显存）
-
-Ollama 已安装并运行（用于本地模型）
-
-2️⃣ 安装 bash
-# 克隆仓库
+```bash
 git clone https://github.com/your-org/brianrag.git
 cd brianrag
-
-# 创建虚拟环境
-python -m venv venv
-source venv/bin/activate        # Linux/macOS
-venv\Scripts\activate           # Windows
-
-# 安装依赖
+python -m venv .venv
+source .venv/bin/activate   # Linux/macOS
+.venv\Scripts\activate      # Windows
 pip install -r requirements.txt
+```
 
-3️⃣ 下载基础模型
+### 2. 下载模型
 
-bash
-ollama pull bge-m3:latest               # 嵌入模型
+```bash
+ollama pull bge-m3:latest          # 嵌入模型（1024维）
+ollama pull qwen2.5:7b             # 主 LLM
+ollama pull qwen2.5:3b             # 三元组提取 / 评估（轻量）
+ollama pull qwen2.5:1.5b           # 意图分类 / 评估器（更轻量）
+ollama pull qwen2.5-vl:7b          # 视觉模型（多模态，可选）
+```
 
-ollama pull qwen2.5:7b                  # LLM（主对话）
+### 3. 配置
 
-ollama pull qwen2.5-vl:7b               # 视觉模型（多模态）
+```bash
+cp config_example.py config.py
+# 编辑 config.py 修改数据库连接、模型名称等
+```
 
-ollama pull qwen2.5:3b                  # 三元组提取（轻量）
+关键配置：
 
-ollama pull qwen2.5:1.5b                # 检索语义，公式等（轻量模型）
+| 配置项 | 默认值 | 说明 |
+|--------|--------|------|
+| `LLM_PROVIDER` | `ollama` | 可选 `openai` / `anthropic` |
+| `LLM_MODEL` | `qwen2.5:7b` | 主对话模型 |
+| `EMBEDDING_MODEL` | `bge-m3:latest` | 嵌入模型 |
+| `TOP_K` | 5 | 检索返回数量 |
+| `ALPHA` | 0.5 | BM25 融合权重 |
+| `ENABLE_PREWARM` | True | 预训练缓存 |
+| `ENABLE_RETRIEVAL_GATING` | True | 检索质量门控 |
 
-以上模型为本地模型，建议外接模型，首先推荐deepseek R1 671b或者GPT模型最好
+### 4. 启动
 
-如果磁盘空间有限，可使用 qwen2.5:3b 作为 LLM 降级方案。
+```bash
+# 先启动 Redis（可选，用于缓存和预训练）
+# D:\redis\redis-server.exe
 
+python run.py
+# 浏览器打开 http://localhost:8000
+```
 
-4️⃣ 配置
+前端提供沉浸式 Three.js 着陆页（8 个滚动叙事场景）→ 点击「进入 BrianRAG」打开 RAG 对话面板。
 
-复制 config.example.py 为 config.py，根据实际修改模型路径、端口等。
+---
 
-关键配置项：python
+## 核心特性
 
+### 混合检索
 
-# 检索
-TOP_K = 5
+- **BM25** 关键词匹配（jieba 分词）
+- **pgvector HNSW** 向量检索（bge-m3 嵌入，1024 维）
+- **知识图谱 RRF** 三路融合
+- **BGE Cross-encoder 重排序**
+- **MMR 去重**保证结果多样性
 
-ALPHA = 0.5
+### 智能体编排
 
-SCORE_THRESHOLD = 0.3
+- **ReAct Agent** 自主规划检索策略
+- **LangGraph 多步推理**：检索→重排→生成→评估→改写
+- **查询优化**：HyDE 假设文档 + 多查询融合（单次 LLM 调用完成）
 
-# 模型
-EMBEDDING_MODEL = "bge-m3:latest"
+### 多模态理解
 
-LLM_MODEL = "qwen2.5:7b"
+- CLIP 视觉语义匹配
+- Qwen2.5-VL 图片描述 + 表格提取
+- Markdown 图片自动渲染
 
-VISION_MODEL = "qwen2.5-vl:7b"
+### 自我修正 & 降级
 
-TRIPLE_EXTRACT_MODEL = "qwen2.5:3b"
-
-
-# 图谱
-ENABLE_GRAPH = True
-
-GRAPH_HOPS = 1
-
-ENABLE_ENTITY_NORMALIZATION = True
-
-# 多模态智能体
-ENABLE_MULTIMODAL = True
-
-# 意图识别权重配置
-
-INTENT_WEIGHT_FORMULA = 1.2
-
-INTENT_WEIGHT_DEFINITION = 1.2
-
-INTENT_WEIGHT_PROCEDURE = 1.2
-
-# 上下文扩展配置
-
-CONTEXT_EXPANSION_BEFORE = 1  
-
-CONTEXT_EXPANSION_AFTER = 1  
-
-## 其他参数见config_example副本
-
-5️⃣ 启动 WebUI
-bash
-streamlit run webui/app.py
-浏览器打开 http://localhost:8501。
-
-6️⃣ 第一个问答
-侧边栏 → 上传文档（支持拖拽多文件）
-
-点击「构建索引」
-
-等待处理完成（进度条实时显示）
-
-下方输入问题 → 得到答案
-
-📚 功能详解
-文档上传与索引
-支持格式：.txt, .pdf, .md, .docx, .html, .csv, .jpg, .png, .gif, .bmp
-
-增量索引：勾选后仅处理新文件，避免全量重建
-
-异步处理：后台线程执行，界面不卡顿
-
-索引持久化：重启无需重建，索引目录 ./index
-
-混合检索
-BM25：关键词匹配（jieba 中文分词）
-
-FAISS：向量相似度搜索（bge‑m3 生成 1024 维向量）
-
-融合权重：alpha 控制 BM25 占比，1-alpha 为向量占比
-
-相似度阈值：低于 score_threshold 的结果被过滤
-
-知识图谱增强
-实体关系抽取：调用轻量 LLM 提取三元组 (实体1, 关系, 实体2)
-
-图存储：使用 NetworkX + pickle 持久化
-
-多跳推理：GRAPH_HOPS 控制检索时扩展邻居跳数
-
-实体规范化：启用 Splink 或相似度合并，消除同义词
-
-可视化：pyvis 导出交互式 HTML，在“知识图谱”标签页查看
-
-多模态智能体
-基于 LangGraph 构建的多节点工作流：
-
-问题分类：判断是纯文本还是图文/表格查询
-
-路径路由：
-
-纯文本 → 快速检索 + 生成
-
-图文/表格 → 视觉处理器（图片描述 + 表格解析）
-
-视觉处理：
-
-图片 → 调用 Qwen2.5-VL 生成中文描述
-
-Markdown 表格 → 提取为 DataFrame，转为自然语言
-
-生成：混合上下文 + 原始答案生成
-
-自我修正 (Self-Correction)
-启用后，每次生成答案后调用评估模型打分（0~1）
-
-若得分低于 SELF_CORRECTION_SCORE_THRESHOLD，自动改写查询并重复检索/生成
-
-最大重试次数 SELF_CORRECTION_MAX_RETRIES
-
-用户反馈与自动调优
-反馈收集：每条答案下方 👍/👎 按钮，可填写评论，保存到 feedback.jsonl
-
-参数调优：点击侧边栏「参数自动调优 (基于反馈)」→ 基于历史负面反馈或标准测试集，使用 RAGAS 评估所有参数组合，更新最优参数至 config.py
-
-可观测性
-日志：logs/brianrag.log，记录每个节点耗时、查询结果等
-
-耗时装饰器：@timeit 自动记录函数执行时间
-
-Prometheus 指标（可选）：/metrics 端点
-
-图谱可视化
-在「知识图谱」标签页，点击「生成并预览图谱」→ 下载 HTML 文件
-
-支持交互式缩放、拖动、搜索节点
-
-⚙️ 配置参考
-完整配置见 config.py，以下为常用项说明：
-
-配置项	默认值	说明
-TOP_K	5	检索返回的文本块数量
-
-ALPHA	0.5	BM25 权重（0~1）
-
-SCORE_THRESHOLD	0.3	相似度过滤阈值
-
-EMBEDDING_MODEL	bge-m3:latest	嵌入模型（Ollama）
-
-LLM_MODEL	qwen2.5:7b	生成模型
-
-VISION_MODEL	qwen2.5-vl:7b	视觉描述模型
-
-TRIPLE_EXTRACT_MODEL	qwen2.5:3b	三元组提取轻量模型
-
-ENABLE_GRAPH	True	启用知识图谱
-
-ENABLE_MULTIMODAL	True	启用多模态智能体
-
-ENABLE_SELF_CORRECTION	True	启用自我修正
-
-ENABLE_RERANK	True	启用重排序（需要下载 reranker 模型）
-
-RERANK_MODEL	D:/reranker/bge-reranker-v2-m3	本地重排序模型路径
-
-GRAPH_HOPS	1	图谱多跳次数
-
-ENABLE_ENTITY_NORMALIZATION	True	实体自动合并
-
-
-
-🧱 项目结构
-![结构.png](webui/assets/%E7%BB%93%E6%9E%84.png)
-
-# ![1.png](webui/assets/1.png)
-
-
-
-##### 🧪 测试与调优
-
-###### 运行单元测试（若有）
-
-bash pytest tests/
-
-###### 超参数自动调优
-
-bash python tune_parameters.py
-
-脚本会遍历预定义的参数网格，使用 RAGAS 评估每组参数的综合得分，并自动更新 config.py。
-
-###### 评估数据集格式
-
-evaluation/test_data.jsonl 每行一个 JSON 对象：
-
-json {"question": "What is RAG?", "ground_truth": "Retrieval-Augmented Generation combines information retrieval and text generation."}
-
-
-
-##### 🐳 Docker 部署（生产推荐） 构建镜像：
-
-bash docker build -t brianrag:latest .
-
-运行容器：
-
-bash docker run -p 8501:8501 -v ./data:/app/data -v ./index:/app/index -v ./logs:/app/logs brianrag:latest
-确保在 Docker 中 Ollama 服务可访问（可通过 host 网络或 --add-host host.docker.internal:host-gateway 连接宿主机 Ollama）。
-
-🤝 贡献指南
-欢迎提交 Issue 和 Pull Request。
-
-Fork 本仓库
-
-创建功能分支 (git checkout -b feature/amazing)
-
-提交更改 (git commit -m 'Add amazing feature')
-
-推送到分支 (git push origin feature/amazing)
-
-创建 Pull Request
-
-#### 📄 许可证 本项目自研代码部分使用 Apache 2.0 许可证，依赖的第三方库遵循其各自协议。
-
-🙏 致谢
-LangChain – 文档加载器、提示词模板
-
-LangGraph – 智能体工作流
-
-FAISS – 向量检索
-
-Ollama – 本地模型部署
-
-Qwen – 基础模型系列
-
-RAGAS – 评估框架
-
-Streamlit – WebUI 框架
-
-📧 联系方式
-项目负责人：Brian
-QQ:2676038895
-WX:15371702638
-
-问题反馈：GitHub Issues
-
-BrianRAG
+- 答案质量自评（0~1 分），低分自动重试
+- **检索门控**：reranker 分 < 阈值时触发降级（放宽检索 → HyDE → 知识缺口响应）
+- 优雅降级：CLIP 缺失 → 回退普通检索；模型不可用 → 友好提示
+
+### 预训练缓存（Prewarm）
+
+- 从已索引文档自动生成 QA 对
+- 预计算答案存入 Redis(db=3) + 嵌入向量
+- 用户查询时相似度匹配秒回（阈值 0.72）
+- 启动时自动注册，支持手动触发
+
+### 模型层可插拔
+
+切换模型只需改 `config.py` 一行：
+
+```python
+LLM_PROVIDER = "ollama"  # 或 "openai" / "anthropic"
+```
+
+所有 LLM/Embedding 调用通过统一抽象层，无需改业务代码。
+
+### GitHub 数据源
+
+- `git clone` + 定时 `pull` + 文件 diff 检测
+- 变更自动触发增量索引
+- API：`POST /api/github/clone`、`POST /api/github/sync`、`GET /api/github/status`
+
+### RAGAS 评估回路
+
+- 独立评估模型（qwen2.5:1.5b）计算 Faithfulness + Answer Relevancy
+- API：`POST /api/eval`、`GET /api/eval/results`、`GET /api/eval/status`
+- 参数网格自动调优（`tune_parameters.py`）
+
+### 文档解析
+
+- 按 `##`/`###` 章节智能切分
+- 语义分块（bge-m3 相似度检测话题边界）
+- 碎片合并（<50 字符自动合并至相邻 chunk）
+- 支持格式：`.pdf` `.md` `.txt` `.docx` `.html` `.csv` `.png` `.jpg` `.zip`
+
+---
+
+## 前端体验
+
+着陆页特性：
+- **Three.js 3D 粒子系统** + **GSAP 摄像机滚动引擎**（8 场景叙事）
+- **marked.js + KaTeX** 完整 Markdown/公式渲染
+- **Lenis 平滑滚动** + 场景进度指示点 + 键盘导航（↑↓←→）
+- 响应式设计（桌面 + 移动端适配）
+
+聊天面板特性：
+- SSE 流式输出 + 分阶段加载指示（searching → generating）
+- 4 种检索模式：RAG / Agent / Graph / Multimodal
+- 可切换参数面板（Top-K、Alpha、Self-Correct、HyDE、MMR）
+- 文档上传（拖拽/点击）+ 异步索引（进度轮询）
+- 停止生成（Esc / Stop 按钮）+ 友好错误提示
+- 复制 / 👍👎 反馈 / 引用弹窗 / 置信度徽章
+
+---
+
+## API 概览
+
+| 端点 | 方法 | 说明 |
+|------|------|------|
+| `/api/query` | POST | 同步查询 |
+| `/api/query/stream` | GET | SSE 流式查询 |
+| `/api/upload` | POST | 上传文档 |
+| `/api/index` | POST | 构建索引 |
+| `/api/documents` | GET | 列出已索引文档 |
+| `/api/documents/{hash}` | DELETE | 删除文档 |
+| `/api/prewarm/status` | GET | 预训练缓存状态 |
+| `/api/prewarm/run` | POST | 手动运行预训练 |
+| `/api/eval` | POST | 触发 RAGAS 评估 |
+| `/api/eval/results` | GET | 查看评估结果 |
+| `/api/github/sync` | POST | 同步 GitHub 仓库 |
+| `/api/health` | GET | 健康检查（含 Redis/PG/Ollama 连通性） |
+
+---
+
+## 项目结构
+
+```
+brianrag/
+├── api/main.py              # FastAPI 应用（所有 REST 端点）
+├── core/
+│   ├── rag_pipeline.py      # RAG 管线编排（query / stream / agentic / graph / multimodal）
+│   ├── retriever.py         # 混合检索器（BM25 + pgvector + 知识图谱 + 多模态）
+│   ├── generator.py         # 答案生成器（prompt 工程 + 语义缓存）
+│   ├── query_optimizer.py   # 查询优化（HyDE / 多查询 / 同义词扩展）
+│   ├── intent_classifier.py # 意图分类（formula / definition / procedure / image / general）
+│   ├── reranker.py          # BGE Cross-encoder 重排序
+│   ├── prewarm.py           # 预训练缓存引擎
+│   ├── self_correction.py   # 答案质量自评与修正
+│   ├── graph_builder.py     # 知识图谱构建与检索
+│   ├── agents.py            # LangGraph 多模态智能体
+│   ├── graph_workflow.py    # LangGraph 迭代 RAG 工作流
+│   ├── llm_provider.py      # LLM/Embedding 可插拔抽象层
+│   ├── metrics.py           # Prometheus 指标
+│   └── telemetry.py         # OpenTelemetry 追踪
+├── utils/
+│   ├── document_loader.py   # 文档加载与智能分块
+│   ├── github_sync.py       # GitHub 仓库同步
+│   └── history_manager.py   # 对话历史管理
+├── evaluation/evaluate.py   # RAGAS 评估脚本
+├── frontend/index.html      # 前端单文件（Three.js + GSAP + Chat UI）
+├── config.py                # 全局配置
+├── run.py                   # 启动入口
+├── tasks.py                 # Celery 异步任务
+└── data/                    # 文档 + 元数据
+```
+
+---
+
+## 配置参考（完整）
+
+<details>
+<summary>点击展开 config.py 所有配置项</summary>
+
+| 配置项 | 默认值 | 说明 |
+|--------|--------|------|
+| `LLM_PROVIDER` | `ollama` | LLM 后端（ollama / openai / anthropic） |
+| `LLM_MODEL` | `qwen2.5:7b` | 主生成模型 |
+| `LLM_API_KEY` | `""` | API Key（OpenAI/Anthropic 时使用） |
+| `EMBEDDING_MODEL` | `bge-m3:latest` | 嵌入模型 |
+| `RERANK_MODEL` | — | BGE Reranker 本地路径 |
+| `TOP_K` | 5 | 检索 top-k |
+| `ALPHA` | 0.5 | BM25 融合权重 |
+| `SCORE_THRESHOLD` | 0.3 | 向量相似度阈值 |
+| `CHUNK_SIZE` | 800 | 文档分块大小 |
+| `ENABLE_SEMANTIC_CHUNKING` | True | 语义分块 |
+| `ENABLE_GRAPH` | True | 知识图谱 |
+| `ENABLE_MULTIMODAL` | True | 多模态检索 |
+| `ENABLE_RERANK` | True | 重排序 |
+| `ENABLE_SELF_CORRECTION` | True | 自我修正 |
+| `ENABLE_CACHE` | True | 语义缓存 |
+| `ENABLE_RETRIEVAL_GATING` | True | 检索质量门控 |
+| `GATING_SCORE_THRESHOLD` | 0.35 | 门控触发阈值 |
+| `PREWARM_SIMILARITY_THRESHOLD` | 0.72 | 预训练缓存匹配阈值 |
+| `LLM_EVALUATOR_MODEL` | `qwen2.5:1.5b` | 评估模型 |
+| `GITHUB_REPO_URL` | `""` | 要同步的 GitHub 仓库 URL |
+| `GITHUB_SYNC_INTERVAL` | 300 | 定时同步间隔（秒） |
+
+</details>
+
+---
+
+## 许可证
+
+自研代码使用 Apache 2.0 许可证。依赖的第三方库遵循各自协议。
+
+## 致谢
+
+LangChain · LangGraph · Ollama · Qwen · pgvector · BGE · RAGAS · Three.js · GSAP · FastAPI

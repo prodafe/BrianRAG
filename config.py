@@ -1,151 +1,293 @@
+"""BrianRAG 配置 — pydantic-settings，自动从 .env / 环境变量加载"""
 import os
+from pathlib import Path
 
-class Config:
-    # 路径
-    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-    DATA_DIR = os.path.join(BASE_DIR, "data")
-    INDEX_DIR = os.path.join(BASE_DIR, "index")
-    CACHE_DIR = os.path.join(BASE_DIR, "cache")
-    LOG_DIR = os.path.join(BASE_DIR, "log")
-    IMAGES_DIR = os.path.join(BASE_DIR, "data", "images")
-    DOC_META_FILE = os.path.join(INDEX_DIR, "doc_meta.json")
+try:
+    from pydantic_settings import BaseSettings
+except ImportError:
+    # 回退：无 pydantic-settings 时使用纯 Python 类
+    BaseSettings = object
 
-    # 检索
-    TOP_K = 5
-    # TOP_K = 20
-    ALPHA = 0.5
-    SCORE_THRESHOLD = 0.3
-    # SCORE_THRESHOLD = 0.1
+_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-    # 重排序配置
-    ENABLE_RERANK = True
-    # ENABLE_RERANK = False
-    RERANK_MODEL = "D:/reranker/bge-reranker-v2-m3"  # 升级模型
-    RERANK_USE_FP16 = True  # 如果GPU支持
-    RERANK_TOP_K = 3
-    RERANK_CANDIDATE_MULTIPLIER = 2
+if BaseSettings is not object:
+    class _Settings(BaseSettings):
+        model_config = {"env_prefix": "BRIAN_", "env_file": ".env",
+                        "env_file_encoding": "utf-8", "extra": "ignore"}
 
+        def __getattr__(self, name: str):
+            """向下兼容 UPPER_CASE 属性名 → 自动映射到 lower_case"""
+            if name.isupper() and not name.startswith('_'):
+                lower = name.lower()
+                if lower in self.model_fields:
+                    return getattr(self, lower)
+            raise AttributeError(f'{type(self).__name__!r} object has no attribute {name!r}')
 
-    # 嵌入模型
-    EMBEDDING_BINDING = "ollama"
-    EMBEDDING_MODEL = "bge-m3:latest"
-    EMBEDDING_DIM = 1024  # bge-m3 的维度是 1024
-    EMBEDDING_BINDING_HOST = "http://localhost:11434"
+        def __setattr__(self, name: str, value):
+            """向下兼容 UPPER_CASE 赋值 → 映射到 lower_case 字段"""
+            if name.isupper() and not name.startswith('_'):
+                lower = name.lower()
+                if lower in self.model_fields:
+                    object.__setattr__(self, lower, value)
+                    return
+            object.__setattr__(self, name, value)
 
-    # 生成模型
-    LLM_MODEL = "qwen2.5:7b"
-    OLLAMA_BASE_URL = "http://localhost:11434"
+        # ── 路径 ──
+        base_dir: str = _BASE_DIR
+        data_dir: str = os.path.join(_BASE_DIR, "data")
+        index_dir: str = os.path.join(_BASE_DIR, "index")
+        cache_dir: str = os.path.join(_BASE_DIR, "cache")
+        log_dir: str = os.path.join(_BASE_DIR, "logs")
+        images_dir: str = os.path.join(_BASE_DIR, "data", "images")
+        doc_meta_file: str = os.path.join(_BASE_DIR, "index", "doc_meta.json")
 
-    # 切片
-    CHUNK_SIZE = 500
-    CHUNK_OVERLAP = 50
+        # ── 检索 ──
+        top_k: int = 5
+        alpha: float = 0.5
+        score_threshold: float = 0.3
+        enable_mmr: bool = True
+        mmr_lambda: float = 0.7
 
+        # ── 重排序 ──
+        enable_rerank: bool = True
+        rerank_model: str = os.path.join(_BASE_DIR, "models", "bge-reranker-v2-m3")
+        rerank_use_fp16: bool = True
+        rerank_top_k: int = 3
+        rerank_candidate_multiplier: int = 2
 
+        # ── 嵌入 ──
+        embedding_binding: str = "ollama"
+        embedding_model: str = "bge-m3:latest"
+        embedding_dim: int = 1024
+        embedding_binding_host: str = "http://localhost:11434"
 
-    # 图谱
-    ENABLE_GRAPH = False          # 是否启用图谱增强
-    GRAPH_FILE = os.path.join(INDEX_DIR, "knowledge_graph.gpickle")
+        # ── LLM Provider ──
+        llm_provider: str = "ollama"
+        llm_model: str = "qwen2.5:7b"
+        ollama_base_url: str = "http://localhost:11434"
+        llm_api_key: str = ""
+        evaluator_model: str = "qwen2.5:1.5b"
 
-    # 知识图谱检索跳数（0 = 只检索直接实体，1 = 包括一跳邻居）
-    GRAPH_HOPS = 1
+        # ── 文档切片 ──
+        chunk_size: int = 800
+        chunk_overlap: int = 100
+        enable_semantic_chunking: bool = True
+        semantic_chunk_threshold: float = 0.45
 
+        # ── 知识图谱 ──
+        enable_graph: bool = True
+        graph_file: str = os.path.join(_BASE_DIR, "index", "knowledge_graph.gpickle")
+        graph_hops: int = 1
+        triple_extract_model: str = "qwen2.5:7b"
 
+        # ── 缓存 ──
+        enable_cache: bool = True
+        cache_similarity_threshold: float = 0.95
+        max_history_turns: int = 5
 
-    # 知识图谱三元组提取专用模型（轻量、快速）
-    TRIPLE_EXTRACT_MODEL = "qwen2.5:7b"  # 可改为 "llama3.2:3b" 或其他
+        # ── 性能 ──
+        embed_batch_size: int = 16
+        hybrid_search_workers: int = 3
+        vision_workers: int = 4
+        vector_hnsw_ef_search: int = 100
 
+        # ── 视觉 ──
+        vision_model: str = "qwen2.5vl:7b"
 
-    # 缓存
-    ENABLE_CACHE = True
-    CACHE_SIMILARITY_THRESHOLD = 0.95
+        # ── 自我修正 ──
+        enable_self_correction: bool = True
+        self_correction_max_retries: int = 2
+        self_correction_score_threshold: float = 0.6
 
-    # 多轮对话配置
-    MAX_HISTORY_TURNS = 5  # 保留最近几轮对话（用户+助手）
+        # ── 实体规范化 ──
+        enable_entity_normalization: bool = True
+        splink_blocking_rule: str = "l.entity_name = r.entity_name"
+        splink_comparison_levels: list = [2, 5]
+        splink_jaro_winkler_thresholds: list = [0.9, 0.95]
 
-    # ========== 性能优化配置 ==========
-    EMBED_BATCH_SIZE = 16  # 嵌入生成时的批量大小（可根据内存调整，最大建议32）
+        # ── 查询优化 ──
+        enable_query_rewrite: bool = True
+        enable_hyde: bool = True
+        hyde_top_k: int = 5
+        enable_multi_query: bool = True
+        enable_synonym_expansion: bool = True
 
+        # ── 数据库 ──
+        database_url: str = "postgresql+psycopg://postgres:postgres@localhost:5432/postgres"
+        vector_table_name: str = "brianrag_vectors"
+        vector_index_type: str = "HNSW"
+        vector_hnsw_m: int = 48
+        vector_hnsw_ef_construction: int = 200
 
-    #视觉模型
-    VISION_MODEL = "qwen2.5vl:7b"
+        @property
+        def async_database_url(self) -> str:
+            return self.database_url.replace("+psycopg://", "+asyncpg://").replace("postgresql://", "postgresql+asyncpg://")
 
-    # Self-Correction 配置
-    ENABLE_SELF_CORRECTION = False
-    SELF_CORRECTION_MAX_RETRIES = 2
-    # 评估阈值（0-1），低于此值触发修正
-    SELF_CORRECTION_SCORE_THRESHOLD = 0.6
+        # ── Chroma (备用) ──
+        chroma_persist_dir: str = os.path.join(_BASE_DIR, "chroma_db")
 
-    # 实体规范化配置
-    ENABLE_ENTITY_NORMALIZATION = False  # 是否启用实体规范化（Splink）
-    SPLINK_BLOCKING_RULE = "l.entity_name = r.entity_name"  # 分块规则，可根据需要调整
-    SPLINK_COMPARISON_LEVELS = [2, 5]  # Levenshtein 距离阈值
-    SPLINK_JARO_WINKLER_THRESHOLDS = [0.9, 0.95]  # Jaro-Winkler 阈值
+        # ── Redis ──
+        redis_url: str = "redis://localhost:6379/0"
 
-    TUNE_ENABLED = False
-    TUNE_PARAM_GRID = {
-        "alpha": [0.3, 0.5, 0.7, 0.9],
-        "top_k": [3, 5, 7],
-        "score_threshold": [0.2, 0.3, 0.4]
-    }
+        # ── 上下文扩展 ──
+        enable_context_expansion: bool = True
+        enable_secondary_retrieval: bool = True
+        secondary_retrieval_threshold: float = 0.65
+        context_expansion_before: int = 1
+        context_expansion_after: int = 1
 
-    # 日志配置
-    LOG_LEVEL = "INFO"  # DEBUG, INFO, WARNING, ERROR
-    LOG_FILE = "logs/brianrag.log"
-    LOG_MAX_BYTES = 10 * 1024 * 1024  # 10MB
-    LOG_BACKUP_COUNT = 5
+        # ── 检索门控 ──
+        enable_retrieval_gating: bool = True
+        gating_score_threshold: float = 0.35
+        gating_max_retries: int = 2
+        gating_knowledge_gap_response: str = "该问题超出当前知识库范围，建议补充相关文档或换个问法。"
 
-    # 查询优化配置
-    ENABLE_QUERY_REWRITE = True  # 是否启用查询改写
-    # ENABLE_QUERY_REWRITE = False
-    ENABLE_HYDE = True  # 是否启用 HyDE
-    # ENABLE_HYDE = False
-    HYDE_TOP_K = 5  # HyDE 生成的假设文档参与检索时的 top_k
+        # ── GitHub 数据源 ──
+        github_repo_url: str = ""
+        github_branch: str = "main"
+        github_token: str = ""
+        github_local_path: str = os.path.join(_BASE_DIR, "data", "github_repo")
+        github_sync_interval: int = 300
+        github_doc_patterns: list = ["*.md", "*.txt", "*.pdf", "*.docx", "*.html", "*.csv"]
 
-    # ==================== 数据库配置 ====================
-    # PostgreSQL 连接字符串（请根据你的实际路径和认证信息修改）
-    # 格式：postgresql://[user[:password]@][host][:port][/database]
-    DATABASE_URL = "postgresql+psycopg://postgres:123456@localhost:5432/postgres"
-    ASYNC_DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://")
-    # 向量存储表名
-    VECTOR_TABLE_NAME = "brianrag_vectors"
+        # ── 意图识别 ──
+        intent_weight_formula: float = 1.2
+        intent_weight_definition: float = 1.2
+        intent_weight_procedure: float = 1.2
+        dynamic_alpha: bool = True
+        enable_intent_weighting: bool = True
 
-    # 混合检索权重：向量检索权重 = 1 - ALPHA（与 BM25 融合时使用）
-    # 我们仍然使用 Config.ALPHA 作为 BM25 权重，向量权重为 1 - ALPHA
+        # ── 多模态 ──
+        enable_multimodal: bool = True
+        multimodal_model_path: str = ""
+        multimodal_device: str = "cuda"
+        multimodal_similarity_threshold: float = 0.7
+        multimodal_top_k: int = 3
+        multimodal_fusion_weight: float = 0.3
 
-    # ==================== 向量索引优化 ====================
-    # HNSW 索引参数
-    VECTOR_INDEX_TYPE = "HNSW"
-    VECTOR_HNSW_M = 32  # 每层最大连接数
-    VECTOR_HNSW_EF_CONSTRUCTION = 200  # 构建时动态列表大小
+        # ── 前端/图片 ──
+        fe_domain: str = "http://localhost:8000"
+        images_url_prefix: str = "/images"
+        process_missing_images: bool = True
 
-    # ==================== 检索性能 ====================
-    HYBRID_SEARCH_WORKERS = 3  # 并行检索线程数（向量 + BM25 + 图谱）
-    VECTOR_HNSW_EF_SEARCH = 100  # 查询时动态列表大小
+        # ── 可观测性 ──
+        enable_telemetry: bool = True
+        otlp_endpoint: str = "http://localhost:4318/v1/traces"
+        enable_metrics: bool = True
 
+        # ── 日志 ──
+        log_level: str = "INFO"
+        log_file: str = "logs/brianrag.log"
+        log_max_bytes: int = 10 * 1024 * 1024
+        log_backup_count: int = 5
 
-    CHROMA_PERSIST_DIR = os.path.join(BASE_DIR, "chroma_db")
+        # ── 热点问题 ──
+        hot_question_threshold: int = 20
+        hot_question_ttl: int = 7 * 24 * 3600
+        hot_question_prewarm_interval: int = 3600
 
+        # ── 预训练 ──
+        prewarm_question_count: int = 150
+        prewarm_similarity_threshold: float = 0.72
 
-    REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+        # ── 调优 ──
+        tune_enabled: bool = False
+        tune_param_grid: dict = {
+            "alpha": [0.3, 0.5, 0.7, 0.9],
+            "top_k": [3, 5, 7],
+            "score_threshold": [0.2, 0.3, 0.4],
+        }
 
-    ENABLE_CONTEXT_EXPANSION = True
-    # ENABLE_CONTEXT_EXPANSION = False
+    Config = _Settings()
+else:
+    # 回退：纯 Python Config（功能相同，无验证）
+    class _Config:
+        def __init__(self):
+            self.base_dir = _BASE_DIR
+            self.data_dir = os.path.join(_BASE_DIR, "data")
+            self.index_dir = os.path.join(_BASE_DIR, "index")
+            self.cache_dir = os.path.join(_BASE_DIR, "cache")
+            self.log_dir = os.path.join(_BASE_DIR, "logs")
+            self.images_dir = os.path.join(_BASE_DIR, "data", "images")
+            self.doc_meta_file = os.path.join(_BASE_DIR, "index", "doc_meta.json")
+            self.top_k = 5; self.alpha = 0.5; self.score_threshold = 0.3
+            self.enable_mmr = True; self.mmr_lambda = 0.7
+            self.enable_rerank = True
+            self.rerank_model = os.path.join(_BASE_DIR, "models", "bge-reranker-v2-m3")
+            self.rerank_use_fp16 = True; self.rerank_top_k = 3; self.rerank_candidate_multiplier = 2
+            self.embedding_binding = "ollama"; self.embedding_model = "bge-m3:latest"
+            self.embedding_dim = 1024; self.embedding_binding_host = "http://localhost:11434"
+            self.llm_provider = "ollama"; self.llm_model = "qwen2.5:7b"
+            self.ollama_base_url = "http://localhost:11434"; self.llm_api_key = ""
+            self.evaluator_model = "qwen2.5:1.5b"
+            self.chunk_size = 800; self.chunk_overlap = 100
+            self.enable_semantic_chunking = True; self.semantic_chunk_threshold = 0.45
+            self.enable_graph = True; self.graph_file = os.path.join(_BASE_DIR, "index", "knowledge_graph.gpickle")
+            self.graph_hops = 1; self.triple_extract_model = "qwen2.5:7b"
+            self.enable_cache = True; self.cache_similarity_threshold = 0.95; self.max_history_turns = 5
+            self.embed_batch_size = 16; self.hybrid_search_workers = 3
+            self.vision_workers = 4; self.vector_hnsw_ef_search = 100
+            self.vision_model = "qwen2.5vl:7b"
+            self.enable_self_correction = True; self.self_correction_max_retries = 2
+            self.self_correction_score_threshold = 0.6
+            self.enable_entity_normalization = True
+            self.splink_blocking_rule = "l.entity_name = r.entity_name"
+            self.splink_comparison_levels = [2, 5]; self.splink_jaro_winkler_thresholds = [0.9, 0.95]
+            self.enable_query_rewrite = True; self.enable_hyde = True; self.hyde_top_k = 5
+            self.enable_multi_query = True; self.enable_synonym_expansion = True
+            self.database_url = os.getenv("DATABASE_URL", "postgresql+psycopg://postgres:postgres@localhost:5432/postgres")
+            self.vector_table_name = "brianrag_vectors"; self.vector_index_type = "HNSW"
+            self.vector_hnsw_m = 48; self.vector_hnsw_ef_construction = 200
+            self.chroma_persist_dir = os.path.join(_BASE_DIR, "chroma_db")
+            self.redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+            self.enable_context_expansion = True; self.enable_secondary_retrieval = True
+            self.secondary_retrieval_threshold = 0.65
+            self.context_expansion_before = 1; self.context_expansion_after = 1
+            self.enable_retrieval_gating = True; self.gating_score_threshold = 0.35
+            self.gating_max_retries = 2
+            self.gating_knowledge_gap_response = "该问题超出当前知识库范围，建议补充相关文档或换个问法。"
+            self.github_repo_url = ""; self.github_branch = "main"; self.github_token = ""
+            self.github_local_path = os.path.join(_BASE_DIR, "data", "github_repo")
+            self.github_sync_interval = 300
+            self.github_doc_patterns = ["*.md", "*.txt", "*.pdf", "*.docx", "*.html", "*.csv"]
+            self.intent_weight_formula = 1.2; self.intent_weight_definition = 1.2
+            self.intent_weight_procedure = 1.2; self.dynamic_alpha = True; self.enable_intent_weighting = True
+            self.enable_multimodal = True; self.multimodal_model_path = ""
+            self.multimodal_device = "cuda"; self.multimodal_similarity_threshold = 0.7
+            self.multimodal_top_k = 3; self.multimodal_fusion_weight = 0.3
+            self.fe_domain = "http://localhost:8000"; self.images_url_prefix = "/images"
+            self.process_missing_images = True
+            self.enable_telemetry = True; self.otlp_endpoint = "http://localhost:4318/v1/traces"
+            self.enable_metrics = True
+            self.log_level = "INFO"; self.log_file = "logs/brianrag.log"
+            self.log_max_bytes = 10 * 1024 * 1024; self.log_backup_count = 5
+            self.hot_question_threshold = 20; self.hot_question_ttl = 7 * 24 * 3600
+            self.hot_question_prewarm_interval = 3600
+            self.prewarm_question_count = 150; self.prewarm_similarity_threshold = 0.72
+            self.tune_enabled = False
+            self.tune_param_grid = {"alpha": [0.3, 0.5, 0.7, 0.9], "top_k": [3, 5, 7], "score_threshold": [0.2, 0.3, 0.4]}
 
-    ENABLE_SECONDARY_RETRIEVAL = True  # 是否启用二次检索
-    # ENABLE_SECONDARY_RETRIEVAL = False
-    SECONDARY_RETRIEVAL_THRESHOLD = 0.65  # 最高分低于此阈值时触发4
+        @property
+        def async_database_url(self):
+            return self.database_url.replace("+psycopg://", "+asyncpg://").replace("postgresql://", "postgresql+asyncpg://")
 
-    # 上下文扩展配置
-    CONTEXT_EXPANSION_BEFORE = 1  # 向前扩展块数
-    CONTEXT_EXPANSION_AFTER = 1  # 向后扩展块数
+    Config = _Config()
 
-    # 意图识别权重配置
-    INTENT_WEIGHT_FORMULA = 1.2
-    INTENT_WEIGHT_DEFINITION = 1.2
-    INTENT_WEIGHT_PROCEDURE = 1.2
+# 加载 .env 文件（无 pydantic-settings 时的手动回退）
+if BaseSettings is object:
+    _env_path = os.path.join(_BASE_DIR, ".env")
+    if os.path.exists(_env_path):
+        with open(_env_path, encoding="utf-8") as _f:
+            for _line in _f:
+                _line = _line.strip()
+                if _line and not _line.startswith("#") and "=" in _line:
+                    _key, _val = _line.split("=", 1)
+                    _key, _val = _key.strip(), _val.strip().strip('"').strip("'")
+                    if _key.startswith("BRIAN_"):
+                        _attr = _key[6:].lower()
+                        if hasattr(Config, _attr):
+                            _cur = getattr(Config, _attr)
+                            _val = type(_cur)(_val) if not isinstance(_cur, bool) else _val.lower() == "true"
+                            setattr(Config, _attr, _val)
 
-    @classmethod
-    def ensure_dirs(cls):
-        for d in [cls.DATA_DIR, cls.INDEX_DIR, cls.CACHE_DIR, cls.LOG_DIR, cls.IMAGES_DIR]:
-            os.makedirs(d, exist_ok=True)
-
+# 兼容旧代码：_Settings.__getattr__ 自动将 UPPER_CASE 映射到 lower_case

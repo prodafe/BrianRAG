@@ -7,6 +7,7 @@ from langchain_community.chat_models import ChatOllama
 from config import Config
 from core.rag_pipeline import RAGPipeline
 
+
 def evaluate_params(top_k: int, alpha: float, score_threshold: float, test_dataset_path: str) -> float:
     """评估一组参数，返回 RAGAS 综合得分（四项指标的平均）"""
     old_top_k = Config.TOP_K
@@ -28,29 +29,33 @@ def evaluate_params(top_k: int, alpha: float, score_threshold: float, test_datas
             res = pipeline.query(question)
             answers.append(res["answer"])
             contexts.append(res["used_chunks"])
-            print(f"  Processed {idx+1}/{len(df)}: {question[:50]}...")
+            print(f"  Processed {idx + 1}/{len(df)}: {question[:50]}...")
 
         df["answer"] = answers
         df["contexts"] = contexts
 
-        llm = ChatOllama(model=Config.LLM_MODEL, base_url=Config.OLLAMA_BASE_URL)
+        from langchain_community.embeddings import OllamaEmbeddings
+        from ragas.embeddings import LangchainEmbeddingsWrapper
+
+        llm = ChatOllama(model=Config.EVALUATOR_MODEL, base_url=Config.OLLAMA_BASE_URL)
         evaluator_llm = LangchainLLMWrapper(llm)
+
+        ollama_emb = OllamaEmbeddings(model=Config.EMBEDDING_MODEL, base_url=Config.OLLAMA_BASE_URL)
+        evaluator_embeddings = LangchainEmbeddingsWrapper(ollama_emb)
 
         result = evaluate(
             dataset=df,
-            metrics=[
-                faithfulness,
-                answer_relevancy,
-                context_precision,
-                context_recall
-            ],
-            llm=evaluator_llm
+            metrics=[faithfulness, answer_relevancy, context_precision, context_recall],
+            llm=evaluator_llm,
+            embeddings=evaluator_embeddings,
         )
         # 综合得分：四项指标的平均
-        score = (result["faithfulness"].mean() +
-                 result["answer_relevancy"].mean() +
-                 result["context_precision"].mean() +
-                 result["context_recall"].mean()) / 4
+        score = (
+            result["faithfulness"].mean()
+            + result["answer_relevancy"].mean()
+            + result["context_precision"].mean()
+            + result["context_recall"].mean()
+        ) / 4
         return score
     finally:
         Config.TOP_K = old_top_k

@@ -6,15 +6,20 @@ from langchain_core.prompts import PromptTemplate
 from config import Config
 from core.retriever import HybridRetriever
 
-# 初始化检索器
-retriever = HybridRetriever()
-# retriever.load()
+# 延迟初始化检索器（避免 import 时创建数据库连接）
+_retriever = None
+
+def _get_retriever():
+    global _retriever
+    if _retriever is None:
+        _retriever = HybridRetriever()
+    return _retriever
 
 # 定义唯一工具：知识检索
 @tool
 def knowledge_search(query: str) -> str:
     """在企业知识库中搜索相关内容。当需要基于内部文档、手册回答问题时使用此工具。"""
-    chunks, _ = retriever.hybrid_search(query, top_k=3)
+    chunks, _ = _get_retriever().hybrid_search(query, top_k=3)
     if not chunks:
         return "未找到相关信息。"
     return "\n\n".join(chunks)

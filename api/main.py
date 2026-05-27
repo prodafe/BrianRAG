@@ -620,6 +620,55 @@ def get_prewarm_engine():
     return _prewarm_engine
 
 
+@app.get("/api/graph")
+async def get_graph(node_limit: int = 200):
+    """导出知识图谱节点与边，供前端可视化。"""
+    from core.retriever import _get_shared
+
+    try:
+        gb = _get_shared("graph_builder")
+        if gb is None or not hasattr(gb, "graph") or gb.graph.number_of_nodes() == 0:
+            return {"nodes": [], "edges": [], "stats": {"node_count": 0, "edge_count": 0}}
+
+        graph = gb.graph
+        e2c = getattr(gb, "entity_to_chunks", {})
+
+        # 按度数排序取 top-N 节点
+        degrees = dict(graph.degree())
+        top_nodes = sorted(degrees.items(), key=lambda x: x[1], reverse=True)[:node_limit]
+        top_ids = {n for n, _ in top_nodes}
+
+        nodes = [
+            {
+                "id": n,
+                "label": n[:50],
+                "degree": d,
+                "chunks": list(e2c.get(n, set()))[:10],
+            }
+            for n, d in top_nodes
+        ]
+
+        edges = [
+            {"from": u, "to": v, "label": data.get("relation", "")[:30]}
+            for u, v, data in graph.edges(data=True)
+            if u in top_ids and v in top_ids
+        ]
+
+        return {
+            "nodes": nodes,
+            "edges": edges[:5000],
+            "stats": {
+                "node_count": graph.number_of_nodes(),
+                "edge_count": graph.number_of_edges(),
+                "displayed_nodes": len(nodes),
+                "displayed_edges": len(edges),
+            },
+        }
+    except Exception as e:
+        logger.error(f"图谱导出失败: {e}")
+        return {"nodes": [], "edges": [], "stats": {"node_count": 0, "edge_count": 0}}
+
+
 class PrewarmResponse(BaseModel):
     status: str = "ok"
     count: int = 0

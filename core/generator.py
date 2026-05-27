@@ -164,7 +164,8 @@ class Generator:
         return prompt
 
     def generate(
-        self, query: str, context_chunks: list[str], history: list | None = None, intent: str = "general"
+        self, query: str, context_chunks: list[str], history: list | None = None, intent: str = "general",
+        model: str | None = None,
     ) -> tuple[str, dict]:
         if not context_chunks:
             return "未找到相关信息。", {}
@@ -179,7 +180,8 @@ class Generator:
         prompt = self._build_prompt(query, context_chunks, history, intent)
 
         try:
-            answer = self._llm.chat([{"role": "user", "content": prompt}], options={"temperature": 0.1, "top_p": 0.9})
+            chat_model = model or Config.llm_model
+            answer = self._llm.chat([{"role": "user", "content": prompt}], model=chat_model, options={"temperature": 0.1, "top_p": 0.9})
         except Exception as e:
             answer = f"生成答案时出错：{e}"
             return answer, {}

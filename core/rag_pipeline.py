@@ -78,6 +78,7 @@ class RAGPipeline:
         self._corrector = None
         self._query_optimizer = None
         self.generator = Generator()
+        self._model_router = None  # lazy init
         self._init_components()
         # 缓存配置 (使用 Redis db=1)
         from core.redis_client import get_redis
@@ -648,6 +649,14 @@ class RAGPipeline:
         logger.info(f"意图分类结果: {intent}")
         dynamic_alpha, enable_multimodal = self._adjust_params_by_intent(intent)
 
+        # 模型智能路由
+        if self._model_router is None:
+            from core.model_router import ModelRouter
+            self._model_router = ModelRouter()
+        route_model, _ = self._model_router.route(intent, question)
+        if route_model != Config.llm_model:
+            logger.info(f"模型路由: {Config.llm_model} → {route_model}")
+
         suggestion = None
 
         with config_override(alpha=dynamic_alpha, enable_multimodal=enable_multimodal):
@@ -700,7 +709,7 @@ class RAGPipeline:
                 gap_response = getattr(Config, "GATING_KNOWLEDGE_GAP_RESPONSE", "该问题超出当前知识库范围。")
                 return self._empty_result(question, suggestion=suggestion, answer=gap_response)
 
-            answer, citations = self.generator.generate(question, llm_context, history=history)
+            answer, citations = self.generator.generate(question, llm_context, history=history, model=route_model)
 
             if self.corrector and Config.ENABLE_SELF_CORRECTION:
                 try:

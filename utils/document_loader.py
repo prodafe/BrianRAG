@@ -366,11 +366,28 @@ def load_single_document(file_path: str) -> list[Document]:
             logger.info(f"PDF 过大 ({size_mb}MB)，使用 PyMuPDF 快速提取: {file_path}")
             try:
                 import fitz
+                from langchain_core.documents import Document
+
+                docs = []
                 doc = fitz.open(file_path)
-                text = "\n".join(page.get_text() for page in doc)
+                current_chunk = ""
+                for page in doc:
+                    page_text = page.get_text().strip()
+                    if not page_text:
+                        continue
+                    if len(current_chunk) + len(page_text) < Config.CHUNK_SIZE * 4:
+                        current_chunk += "\n\n" + page_text
+                    else:
+                        if current_chunk.strip():
+                            docs.append(Document(page_content=current_chunk.strip(),
+                                                 metadata={"source": file_path, "type": "pdf_pymupdf"}))
+                        current_chunk = page_text
+                if current_chunk.strip():
+                    docs.append(Document(page_content=current_chunk.strip(),
+                                         metadata={"source": file_path, "type": "pdf_pymupdf"}))
                 doc.close()
-                if text.strip():
-                    return [Document(page_content=text, metadata={"source": file_path, "type": "pdf_pymupdf"})]
+                if docs:
+                    return docs
             except Exception as e:
                 logger.warning(f"PyMuPDF 提取失败: {e}")
             return []

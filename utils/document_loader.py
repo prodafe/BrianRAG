@@ -47,11 +47,24 @@ def _register_builtins():
     def _unified(file_path):
         return UnifiedDocumentLoader().load(file_path)
 
+    def _text(file_path):
+        """Plain text loader — read file as-is, split into chunks."""
+        from langchain_core.documents import Document
+
+        with open(file_path, encoding="utf-8", errors="replace") as f:
+            content = f.read()
+        if not content.strip():
+            return []
+        return [Document(page_content=content, metadata={"source": file_path, "type": "text"})]
+
     _loader_registry[".md"] = _md
-    for e in [".jpg", ".jpeg", ".png", ".gif", ".bmp"]:
+    for e in [".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp"]:
         _loader_registry[e] = _img
-    for e in [".pdf", ".docx", ".html", ".txt", ".csv", ".pptx", ".xlsx", ".xml", ".rtf", ".odt", ".epub"]:
+    for e in [".pdf", ".docx", ".html", ".txt", ".csv", ".pptx", ".xlsx", ".xml", ".rtf", ".odt", ".epub",
+              ".py", ".sh", ".rviz", ".ldenc"]:
         _loader_registry[e] = _unified
+    # JSON/plain-text formats: unstructured can't handle these, use simple text loader
+    _loader_registry[".json"] = _text
 
 
 try:
@@ -282,9 +295,15 @@ class UnifiedDocumentLoader:
             logger.error("unstructured 未安装")
             return []
 
-        elements = partition(
-            filename=file_path, strategy="auto", include_page_breaks=False, languages=["chi_sim", "eng"]
-        )
+        try:
+            elements = partition(
+                filename=file_path, strategy="auto", include_page_breaks=False, languages=["chi_sim", "eng"]
+            )
+        except Exception:
+            logger.warning(f"auto 策略失败，回退到 fast: {file_path}")
+            elements = partition(
+                filename=file_path, strategy="fast", include_page_breaks=False, languages=["chi_sim", "eng"]
+            )
 
         markdown_parts = []
         for elem in elements:
@@ -340,35 +359,38 @@ class UnifiedDocumentLoader:
 def load_single_document(file_path: str) -> list[Document]:
     ext = os.path.splitext(file_path)[1].lower()
 
-    # PDF：优先用版式分析器
+    # PDF：优先用版式分析器（大文件跳过，避免超时/内存溢出）
     if ext == ".pdf":
-        try:
-            from utils.layout_analyzer import analyze_pdf_layout, pdf_has_text_layer
+        if os.path.getsize(file_path) > 20 * 1024 * 1024:
+            logger.info(f"PDF 过大 ({os.path.getsize(file_path) // 1024 // 1024}MB)，跳过版式分析: {file_path}")
+        else:
+            try:
+                from utils.layout_analyzer import analyze_pdf_layout, pdf_has_text_layer
 
-            if pdf_has_text_layer(file_path):
-                logger.info(f"使用版式分析器处理: {file_path}")
-                md_text = analyze_pdf_layout(file_path, image_output_dir=Config.IMAGES_DIR)
-                if md_text and len(md_text) > 100:
-                    splitter = RecursiveCharacterTextSplitter(
-                        chunk_size=getattr(Config, "chunk_size", 800),
-                        chunk_overlap=getattr(Config, "chunk_overlap", 100),
-                        separators=["\n\n", "\n", "。", ". ", " ", ""],
-                    )
-                    chunks = splitter.split_text(md_text)
-                    docs = [
-                        Document(page_content=chunk, metadata={"source": file_path, "type": "pdf_layout_analyzed"})
-                        for chunk in chunks
-                    ]
-                    _apply_ocr_to_docs(docs, file_path, is_image=False)
-                    return docs
-                logger.info(f"版式分析器输出不足，回退: {file_path}")
-        except ImportError:
-            pass
-        except Exception as e:
-            logger.warning(f"版式分析失败: {e}")
+                if pdf_has_text_layer(file_path):
+                    logger.info(f"使用版式分析器处理: {file_path}")
+                    md_text = analyze_pdf_layout(file_path, image_output_dir=Config.IMAGES_DIR)
+                    if md_text and len(md_text) > 100:
+                        splitter = RecursiveCharacterTextSplitter(
+                            chunk_size=getattr(Config, "chunk_size", 800),
+                            chunk_overlap=getattr(Config, "chunk_overlap", 100),
+                            separators=["\n\n", "\n", "。", ". ", " ", ""],
+                        )
+                        chunks = splitter.split_text(md_text)
+                        docs = [
+                            Document(page_content=chunk, metadata={"source": file_path, "type": "pdf_layout_analyzed"})
+                            for chunk in chunks
+                        ]
+                        _apply_ocr_to_docs(docs, file_path, is_image=False)
+                        return docs
+                    logger.info(f"版式分析器输出不足，回退: {file_path}")
+            except ImportError:
+                pass
+            except Exception as e:
+                logger.warning(f"版式分析失败: {e}")
 
     # 图片：OCR 补充
-    if ext in [".jpg", ".jpeg", ".png", ".gif", ".bmp"]:
+    if ext in [".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp"]:
         docs = _process_image_file(file_path)
         _apply_ocr_to_docs(docs, file_path, is_image=True)
         return docs

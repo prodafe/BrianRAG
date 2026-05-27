@@ -1,4 +1,4 @@
-"""OCR 模块 — 扫描件 PDF/图片文字提取，支持 Tesseract 和 PaddleOCR"""
+"""OCR module — scanned PDF / image text extraction. Supports Tesseract and PaddleOCR 3.5+"""
 
 import logging
 import os
@@ -8,7 +8,9 @@ from PIL import Image
 
 logger = logging.getLogger(__name__)
 
-# 检测可用的 OCR 引擎
+# PaddlePaddle oneDNN crashes on Windows with new IR → disable
+os.environ.setdefault("PADDLE_DISABLE_ONEDNN", "1")
+
 _TESSERACT_OK = False
 _PADDLE_OK = False
 
@@ -27,23 +29,30 @@ except ImportError:
     pass
 
 _ocr_instance: object | None = None
+_PADDLE_35: bool = False
 
 
 def _get_paddle():
-    global _ocr_instance
+    global _ocr_instance, _PADDLE_35
     if _ocr_instance is None:
         try:
             from paddleocr import PaddleOCR
 
-            _ocr_instance = PaddleOCR(lang="ch", use_angle_cls=True, show_log=False)
+            # try 3.5+ API first, fall back to 2.x
+            try:
+                _ocr_instance = PaddleOCR(lang="ch")
+                _PADDLE_35 = True
+            except TypeError:
+                _ocr_instance = PaddleOCR(lang="ch", use_angle_cls=True, show_log=False)
+                _PADDLE_35 = False
         except Exception as e:
-            logger.warning(f"PaddleOCR 初始化失败: {e}")
+            logger.warning(f"PaddleOCR init failed: {e}")
             _ocr_instance = False
     return _ocr_instance if _ocr_instance is not False else None
 
 
 def extract_text_from_image(image_path: str, engine: str = "auto") -> str:
-    """从单张图片提取文字。engine: auto/paddle/tesseract"""
+    """Extract text from a single image. engine: auto / paddle / tesseract"""
     if not os.path.exists(image_path):
         return ""
 
@@ -53,7 +62,7 @@ def extract_text_from_image(image_path: str, engine: str = "auto") -> str:
         elif _TESSERACT_OK:
             engine = "tesseract"
         else:
-            logger.warning("未安装任何 OCR 引擎，跳过图片文字提取")
+            logger.debug("No OCR engine available, skipping image text extraction")
             return ""
 
     if engine == "paddle":
@@ -71,29 +80,65 @@ def _ocr_tesseract(image_path: str) -> str:
         text = pytesseract.image_to_string(img, lang="chi_sim+eng")
         return text.strip()
     except Exception as e:
-        logger.error(f"Tesseract OCR 失败: {e}")
+        logger.error(f"Tesseract OCR failed: {e}")
         return ""
+
+
+def _resize_for_ocr(image_path: str, max_side: int = 2000) -> str | None:
+    """Resize large images to avoid PaddlePaddle segfault. Returns path to resized image or None."""
+    from PIL import Image, UnidentifiedImageError
+
+    try:
+        img = Image.open(image_path)
+    except UnidentifiedImageError:
+        return None
+    w, h = img.size
+    if w <= max_side and h <= max_side:
+        return image_path  # no resize needed
+    scale = max_side / max(w, h)
+    new_size = (int(w * scale), int(h * scale))
+    img = img.resize(new_size, Image.LANCZOS)
+    tmp = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
+    img.save(tmp.name, format="PNG")
+    return tmp.name
 
 
 def _ocr_paddle(image_path: str) -> str:
+    tmp_path = None
     try:
+        # Resize large images to prevent PaddlePaddle segfault
+        candidate = _resize_for_ocr(image_path)
+        if candidate is None:
+            return ""
+        if candidate != image_path:
+            tmp_path = candidate
+
         ocr = _get_paddle()
         if not ocr:
             return ""
-        result = ocr.ocr(image_path, cls=True)
+        result = ocr.ocr(candidate)
         if not result or not result[0]:
             return ""
-        lines = []
-        for line in result[0]:
-            if line and len(line) >= 2:
-                text = line[1][0]
-                confidence = line[1][1]
-                if confidence > 0.5:
-                    lines.append(text)
+        page = result[0]
+        if _PADDLE_35:
+            texts = page.get("rec_texts", [])
+            scores = page.get("rec_scores", [])
+            lines = [t for t, s in zip(texts, scores) if s > 0.5 and t.strip()]
+        else:
+            lines = []
+            for line in page:
+                if line and len(line) >= 2:
+                    text = line[1][0]
+                    confidence = line[1][1]
+                    if confidence > 0.5:
+                        lines.append(text)
         return "\n".join(lines)
     except Exception as e:
-        logger.error(f"PaddleOCR 失败: {e}")
+        logger.warning(f"PaddleOCR failed: {e}")
         return ""
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            os.unlink(tmp_path)
 
 
 def extract_text_from_pdf(pdf_path: str, engine: str = "auto") -> str:

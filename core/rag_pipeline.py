@@ -268,14 +268,17 @@ class RAGPipeline:
                 queries.append(expanded)
         return queries
 
-    def _multi_query_retrieve(self, queries: list, top_k_per_query: int):
+    def _multi_query_retrieve(self, queries: list, top_k_per_query: int, alpha: float | None = None):
         if self.retriever is None or not queries:
             return [], []
+        if alpha is None:
+            from config import _get_config
+            alpha = _get_config("alpha")
         all_chunks = []
         all_indices = []
         seen = set()
         with ThreadPoolExecutor(max_workers=len(queries)) as executor:
-            futures = {executor.submit(self.retriever.hybrid_search, q, top_k_per_query): q for q in queries}
+            futures = {executor.submit(self.retriever.hybrid_search, q, top_k_per_query, alpha): q for q in queries}
             for future in futures:
                 chunks, indices = future.result()
                 for chunk, idx in zip(chunks, indices, strict=False):

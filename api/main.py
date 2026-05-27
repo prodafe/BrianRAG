@@ -37,7 +37,6 @@ app = FastAPI(title="BrianRAG API", version="2.0.0")
 
 # ── API Key 鉴权（可选，通过环境变量 BRIAN_API_KEY 启用）──
 _API_KEY = os.getenv("BRIAN_API_KEY", "")
-_API_KEY = os.getenv("BRIAN_API_KEY", "")
 _TENANT_MODE = os.getenv("BRIAN_TENANT_MODE", "") == "true"
 
 if _API_KEY or _TENANT_MODE:

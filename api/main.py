@@ -33,7 +33,20 @@ from utils.hot_question_tracker import get_hot_questions
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="BrianRAG API", version="2.0.0")
+tags_metadata = [
+    {"name": "Query", "description": "核心问答接口 — RAG/Agentic/Graph/Multimodal 四种模式"},
+    {"name": "Index & Documents", "description": "文档上传、索引构建与检索管理"},
+    {"name": "Knowledge Graph", "description": "知识图谱可视化数据导出"},
+    {"name": "Health & Status", "description": "服务健康检查与系统状态"},
+    {"name": "Evaluation", "description": "RAGAS 评估与结果查询"},
+    {"name": "History & Feedback", "description": "对话历史与用户反馈"},
+    {"name": "Sessions & Auth", "description": "租户/会话多用户隔离"},
+    {"name": "Prewarm", "description": "预训练缓存管理"},
+    {"name": "GitHub Sync", "description": "GitHub 数据源同步"},
+]
+
+app = FastAPI(title="BrianRAG API", version="2.0.0", openapi_tags=tags_metadata,
+              description="Enterprise Knowledge Engine — 本地优先 RAG 知识库问答系统。支持混合检索、知识图谱、多模态。")
 
 # ── API Key 鉴权（可选，通过环境变量 BRIAN_API_KEY 启用）──
 _API_KEY = os.getenv("BRIAN_API_KEY", "")
@@ -163,7 +176,7 @@ def shutdown_watcher():
 
 
 # ---------- 历史相关 API ----------
-@app.post("/api/history/add")
+@app.post("/api/history/add", tags=["History & Feedback"], summary="记录用户提问")
 async def add_history(question: str):
     """记录用户提问"""
     global _history_manager
@@ -173,7 +186,7 @@ async def add_history(question: str):
     return {"status": "ok"}
 
 
-@app.get("/api/history/recommend")
+@app.get("/api/history/recommend", tags=["History & Feedback"], summary="基于历史推荐问题")
 async def recommend_questions(question: str, top_k: int = 3):
     """获取相似历史问题推荐"""
     global _history_manager
@@ -187,20 +200,20 @@ async def recommend_questions(question: str, top_k: int = 3):
 from utils.session_manager import get_session_manager
 
 
-@app.post("/api/sessions")
+@app.post("/api/sessions", tags=["Sessions & Auth"], summary="创建/列出会话")
 async def create_session(name: str = ""):
     mgr = get_session_manager()
     session = mgr.create_session(name)
     return session
 
 
-@app.get("/api/sessions")
+@app.get("/api/sessions", tags=["Sessions & Auth"], summary="创建/列出会话")
 async def list_sessions():
     mgr = get_session_manager()
     return {"sessions": mgr.list_sessions()}
 
 
-@app.get("/api/sessions/{sid}")
+@app.get("/api/sessions/{sid}", tags=["Sessions & Auth"], summary="创建/列出会话")
 async def get_session(sid: str):
     mgr = get_session_manager()
     session = mgr.get_session(sid)
@@ -210,7 +223,7 @@ async def get_session(sid: str):
     return {"session": session, "history": history}
 
 
-@app.delete("/api/sessions/{sid}")
+@app.delete("/api/sessions/{sid}", tags=["Sessions & Auth"], summary="创建/列出会话")
 async def delete_session(sid: str):
     mgr = get_session_manager()
     mgr.delete_session(sid)
@@ -221,17 +234,17 @@ async def delete_session(sid: str):
 from utils.auth import create_tenant, create_user, delete_tenant, delete_user, get_tenant, list_tenants, list_users
 
 
-@app.post("/api/tenants")
+@app.post("/api/tenants", tags=["Sessions & Auth"], summary="创建/列出租户")
 async def api_create_tenant(name: str, email: str = ""):
     return create_tenant(name, email)
 
 
-@app.get("/api/tenants")
+@app.get("/api/tenants", tags=["Sessions & Auth"], summary="创建/列出租户")
 async def api_list_tenants():
     return {"tenants": list_tenants()}
 
 
-@app.get("/api/tenants/{tid}")
+@app.get("/api/tenants/{tid}", tags=["Sessions & Auth"], summary="创建/列出租户")
 async def api_get_tenant(tid: str):
     t = get_tenant(tid)
     if not t:
@@ -239,13 +252,13 @@ async def api_get_tenant(tid: str):
     return {"tenant": t, "users": list_users(tid)}
 
 
-@app.delete("/api/tenants/{tid}")
+@app.delete("/api/tenants/{tid}", tags=["Sessions & Auth"], summary="创建/列出租户")
 async def api_delete_tenant(tid: str):
     delete_tenant(tid)
     return {"status": "ok"}
 
 
-@app.post("/api/tenants/{tid}/users")
+@app.post("/api/tenants/{tid}/users", tags=["Sessions & Auth"], summary="创建/列出租户")
 async def api_create_user(tid: str, username: str, role: str = "viewer"):
     try:
         return create_user(tid, username, role)
@@ -253,7 +266,7 @@ async def api_create_user(tid: str, username: str, role: str = "viewer"):
         raise HTTPException(400, str(e))
 
 
-@app.get("/api/tenants/{tid}/users")
+@app.get("/api/tenants/{tid}/users", tags=["Sessions & Auth"], summary="创建/列出租户")
 async def api_list_users(tid: str):
     return {"users": list_users(tid)}
 
@@ -289,7 +302,7 @@ _bg_tasks: dict[str, dict] = {}
 _bg_executor = ThreadPoolExecutor(max_workers=2)
 
 
-@app.post("/api/index", response_model=IndexResponse)
+@app.post("/api/index", response_model=IndexResponse, tags=["Index & Documents"], summary="触发文档索引构建")
 async def start_indexing(req: IndexRequest):
     if not req.file_paths:
         raise HTTPException(status_code=400, detail="文件路径列表不能为空")
@@ -318,7 +331,7 @@ async def start_indexing(req: IndexRequest):
     return IndexResponse(task_id=task_id)
 
 
-@app.get("/api/task/{task_id}")
+@app.get("/api/task/{task_id}", tags=["Index & Documents"], summary="查询索引任务进度")
 async def get_task_status(task_id: str):
     task = _bg_tasks.get(task_id)
     if not task:
@@ -330,8 +343,7 @@ _health_cache = {"ts": 0, "data": None}
 _health_cache_ttl = 5  # 缓存 5 秒，避免高负载下频繁建连
 
 
-@app.get("/api/health")
-@limiter.limit("5/second")
+@app.get("/api/health", tags=["Health & Status"], summary="服务健康检查")@limiter.limit("5/second")
 async def health(request: Request):
     now = time.time()
     if now - _health_cache["ts"] < _health_cache_ttl and _health_cache["data"]:
@@ -380,7 +392,7 @@ async def health(request: Request):
     return status
 
 
-@app.post("/api/upload")
+@app.post("/api/upload", tags=["Index & Documents"], summary="上传文档文件")
 async def upload_files(files: list[UploadFile] = File(...)):
     saved_paths = []
     upload_dir = os.path.join(Config.DATA_DIR, "uploads")
@@ -425,7 +437,7 @@ async def upload_files(files: list[UploadFile] = File(...)):
     return {"file_paths": saved_paths}
 
 
-@app.get("/api/documents")
+@app.get("/api/documents", tags=["Index & Documents"], summary="已索引文档列表")
 async def get_documents():
     meta_path = os.path.join(Config.INDEX_DIR, "doc_meta.json")
     if not os.path.exists(meta_path):
@@ -436,7 +448,7 @@ async def get_documents():
     return {"documents": docs}
 
 
-@app.delete("/api/documents/{file_hash}")
+@app.delete("/api/documents/{file_hash}", tags=["Index & Documents"], summary="已索引文档列表")
 async def delete_document(file_hash: str):
     try:
         meta_path = os.path.join(Config.INDEX_DIR, "doc_meta.json")
@@ -457,7 +469,7 @@ async def delete_document(file_hash: str):
         raise HTTPException(500, f"删除失败: {str(e)}")
 
 
-@app.get("/api/documents/last_updated")
+@app.get("/api/documents/last_updated", tags=["Index & Documents"], summary="文档最后更新时间")
 async def get_last_updated():
     try:
         r = get_redis(db=0, socket_connect_timeout=2)
@@ -474,7 +486,7 @@ class FeedbackRequest(BaseModel):
     comment: str = ""
 
 
-@app.post("/api/feedback")
+@app.post("/api/feedback", tags=["History & Feedback"], summary="提交用户反馈（正/负面）")
 async def record_feedback(req: FeedbackRequest):
     """记录用户反馈，negative 反馈用于改进后续检索"""
     import json
@@ -521,8 +533,7 @@ def get_pipeline():
     return _pipeline
 
 
-@app.post("/api/query")
-@limiter.limit("10/minute")
+@app.post("/api/query", tags=["Query"], summary="知识库问答查询（支持 rag/agentic/graph/multimodal）")@limiter.limit("10/minute")
 async def query(request: Request, req: QueryRequest):
     """同步查询接口"""
     pipeline = get_pipeline()
@@ -552,7 +563,7 @@ async def query(request: Request, req: QueryRequest):
         raise HTTPException(500, f"查询失败: {str(e)}")
 
 
-@app.get("/api/query/stream")
+@app.get("/api/query/stream", tags=["Query"], summary="SSE 流式问答")
 async def query_stream(question: str, mode: str = "rag", history: str = "[]"):
     """SSE 流式查询接口。history 为 JSON 编码的对话历史列表。"""
     pipeline = get_pipeline()
@@ -619,7 +630,7 @@ def get_prewarm_engine():
     return _prewarm_engine
 
 
-@app.get("/api/graph")
+@app.get("/api/graph", tags=["Knowledge Graph"], summary="知识图谱节点与边数据")
 async def get_graph(node_limit: int = 200):
     """导出知识图谱节点与边，供前端可视化。"""
     from core.retriever import _get_shared
@@ -678,7 +689,7 @@ class PlaygroundRequest(BaseModel):
     enable_mmr: bool | None = None
 
 
-@app.post("/api/playground/query")
+@app.post("/api/playground/query", tags=["Query"], summary="RAG 调试（全流程 trace）")
 async def playground_query(req: PlaygroundRequest):
     """RAG 调试端点 — 返回全流程 trace 信息。"""
     import time
@@ -748,7 +759,7 @@ class PrewarmResponse(BaseModel):
     message: str = ""
 
 
-@app.post("/api/prewarm", response_model=PrewarmResponse)
+@app.post("/api/prewarm", response_model=PrewarmResponse, tags=["Prewarm"], summary="构建预训练缓存")
 async def start_prewarm():
     """触发预训练：基于已索引文档生成问答对并缓存"""
     engine = get_prewarm_engine()
@@ -764,7 +775,7 @@ async def start_prewarm():
         return PrewarmResponse(status="error", message=str(e))
 
 
-@app.get("/api/prewarm/status")
+@app.get("/api/prewarm/status", tags=["Health & Status"], summary="预训练缓存状态")
 async def prewarm_status():
     engine = get_prewarm_engine()
     return engine.get_status()
@@ -776,7 +787,7 @@ _eval_running = False
 _eval_last_result = None
 
 
-@app.post("/api/eval")
+@app.post("/api/eval", tags=["Evaluation"], summary="触发 RAGAS 评估")
 async def run_evaluation(limit: int = 20, mode: str = "rag"):
     """触发 RAGAS 评估，使用独立的评估模型避免循环论证"""
     global _eval_running, _eval_last_result
@@ -824,7 +835,7 @@ async def run_evaluation(limit: int = 20, mode: str = "rag"):
         _eval_running = False
 
 
-@app.get("/api/eval/results")
+@app.get("/api/eval/results", tags=["Evaluation"], summary="获取评估结果")
 async def get_eval_results():
     """获取最近一次评估结果"""
     if _eval_last_result is None:
@@ -841,7 +852,7 @@ async def get_eval_results():
     return {"status": "ok", "result": _eval_last_result}
 
 
-@app.get("/api/eval/status")
+@app.get("/api/eval/status", tags=["Evaluation"], summary="评估任务状态")
 async def eval_status():
     """检查评估是否正在运行"""
     return {"running": _eval_running}

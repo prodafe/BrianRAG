@@ -10,19 +10,24 @@ on:
 jobs:
   lint:
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
       - run: pip install "ruff>=0.6"
-      - run: |
-          echo "=== ruff version ===" && ruff --version
-          echo "=== git commit ===" && git log -1 --oneline
-          echo "=== working dir ===" && pwd && ls -la
-          echo "=== pyproject.toml ===" && head -120 pyproject.toml
       - run: ruff check .
+
+  typecheck:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install mypy pydantic pydantic-settings
+      - run: mypy core/ --ignore-missing-imports --no-error-summary 2>&1 | head -50
 
   test:
     runs-on: ubuntu-latest
@@ -35,4 +40,4 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - run: pip install pytest pytest-cov pydantic pydantic-settings rank_bm25 jieba redis
-      - run: pytest tests/ -v -m "not integration and not slow"
+      - run: pytest tests/ -v -m "not integration and not slow" --cov=core --cov=api --cov=utils --cov-report=term-missing

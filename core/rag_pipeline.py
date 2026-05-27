@@ -720,12 +720,38 @@ class RAGPipeline:
 
             highlight_terms = self._generate_highlight_terms(question)
 
+            # 构建 chunk 来源元数据（文件名 + 分数）
+            chunk_sources = []
+            for i, idx in enumerate(text_indices):
+                src = {}
+                if self.retriever and idx < len(self.retriever.chunk_metadata):
+                    meta = self.retriever.chunk_metadata[idx]
+                    source_path = meta.get("source", "")
+                    # 提取相对于 data/ 的路径
+                    if source_path:
+                        src["file"] = source_path.replace("\\", "/").split("/udoc/")[-1].split("/data/")[-1]
+                    src["type"] = meta.get("type") or meta.get("source_type", "text")
+                src["score"] = round(top_rerank_score, 3) if i == 0 else None
+                chunk_sources.append(src)
+
+            # 增强 citations，附加来源信息
+            enhanced_citations = {}
+            for num_str, chunk_text in citations.items():
+                idx = int(num_str) - 1
+                enhanced_citations[num_str] = {
+                    "text": chunk_text,
+                    "source": chunk_sources[idx] if idx < len(chunk_sources) else {},
+                }
+                if enhanced_citations[num_str]["source"].get("score") is None:
+                    enhanced_citations[num_str]["source"]["score"] = round(top_rerank_score, 3)
+
             result = {
                 "question": question,
                 "answer": answer,
                 "used_chunks": text_chunks,
                 "used_images": used_images,
-                "citations": citations,
+                "citations": enhanced_citations,
+                "chunk_sources": chunk_sources,
                 "graph_extra_indices": extra_indices,
                 "highlight_terms": highlight_terms,
                 "suggestion": suggestion,
@@ -806,8 +832,25 @@ class RAGPipeline:
 
             citations = self.generator._extract_citations(final_answer, llm_context)
             highlight_terms = self._generate_highlight_terms(question)
+            # 构建 chunk 来源信息
+            stream_chunk_sources = []
+            for i, idx in enumerate(text_indices):
+                src = {}
+                if self.retriever and idx < len(self.retriever.chunk_metadata):
+                    meta = self.retriever.chunk_metadata[idx]
+                    sp = meta.get("source", "")
+                    if sp:
+                        src["file"] = sp.replace("\\", "/").split("/udoc/")[-1].split("/data/")[-1]
+                    src["type"] = meta.get("type") or meta.get("source_type", "text")
+                src["score"] = round(top_rerank_score, 3) if i == 0 else None
+                stream_chunk_sources.append(src)
             # 流式结束前发送元数据
-            yield json.dumps({"__meta__": True, "citations": citations, "used_chunks": text_chunks}, ensure_ascii=False)
+            yield json.dumps({
+                "__meta__": True,
+                "citations": citations,
+                "used_chunks": text_chunks,
+                "chunk_sources": stream_chunk_sources,
+            }, ensure_ascii=False)
 
     def agentic_query(self, question: str, history: list = None) -> dict:
         if AGENTIC_AVAILABLE and run_agent is not None:

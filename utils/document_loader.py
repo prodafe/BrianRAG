@@ -60,11 +60,11 @@ def _register_builtins():
     _loader_registry[".md"] = _md
     for e in [".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp"]:
         _loader_registry[e] = _img
-    for e in [".pdf", ".docx", ".html", ".txt", ".csv", ".pptx", ".xlsx", ".xml", ".rtf", ".odt", ".epub",
-              ".py", ".sh", ".rviz", ".ldenc"]:
+    for e in [".pdf", ".docx", ".html", ".txt", ".csv", ".pptx", ".xlsx", ".xml", ".rtf", ".odt", ".epub", ".py"]:
         _loader_registry[e] = _unified
-    # JSON/plain-text formats: unstructured can't handle these, use simple text loader
-    _loader_registry[".json"] = _text
+    # Plain-text / script / config formats: unstructured can't handle, use text loader
+    for e in [".json", ".sh", ".rviz", ".ldenc", ".yml", ".yaml", ".toml", ".ini", ".cfg"]:
+        _loader_registry[e] = _text
 
 
 try:

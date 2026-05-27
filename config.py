@@ -111,7 +111,7 @@ if BaseSettings is not object:
         # ── 实体规范化 ──
         enable_entity_normalization: bool = True
         splink_blocking_rule: str = "l.entity_name = r.entity_name"
-        splink_comparison_levels: list = [2, 5]
+        splink_comparison_levels: list = [1, 2]
         splink_jaro_winkler_thresholds: list = [0.9, 0.95]
 
         # ── 查询优化 ──
@@ -266,7 +266,7 @@ else:
             self.self_correction_score_threshold = 0.6
             self.enable_entity_normalization = True
             self.splink_blocking_rule = "l.entity_name = r.entity_name"
-            self.splink_comparison_levels = [2, 5]
+            self.splink_comparison_levels = [1, 2]
             self.splink_jaro_winkler_thresholds = [0.9, 0.95]
             self.enable_query_rewrite = True
             self.enable_hyde = True

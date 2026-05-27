@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 
 class LayoutBlock:
-    __slots__ = ("x0", "y0", "x1", "y1", "text", "block_type", "page_num")
+    __slots__ = ("x0", "y0", "x1", "y1", "text", "block_type", "page_num", "_col")
 
     def __init__(self, x0, y0, x1, y1, text, block_type="text", page_num=0):
         self.x0 = float(x0)

@@ -33,7 +33,7 @@ from utils.hot_question_tracker import get_hot_questions
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="BrianRAG API", version="1.0.0")
+app = FastAPI(title="BrianRAG API", version="2.0.0")
 
 # ── API Key 鉴权（可选，通过环境变量 BRIAN_API_KEY 启用）──
 _API_KEY = os.getenv("BRIAN_API_KEY", "")

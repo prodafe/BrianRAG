@@ -13,9 +13,8 @@ psycopg[binary]>=3.2
 pgvector>=0.3
 langchain-postgres>=0.0.13
 
-# Cache & Queue
+# Cache
 redis[hiredis]>=5.1
-celery>=5.4
 
 # Retrieval
 rank-bm25>=0.2.2

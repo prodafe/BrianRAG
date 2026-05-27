@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "brianrag"
-version = "1.0.0"
+version = "2.0.0"
 description = "Enterprise Knowledge Engine — 本地优先 RAG 知识库问答系统"
 readme = "readme.md"
 license = {text = "Apache-2.0"}
@@ -69,6 +69,13 @@ dev = [
     "ruff>=0.6",
     "mypy>=1.11",
 ]
+
+[project.urls]
+Homepage = "https://github.com/prodafe/BrianRAG"
+Documentation = "https://github.com/prodafe/BrianRAG#readme"
+Repository = "https://github.com/prodafe/BrianRAG.git"
+Issues = "https://github.com/prodafe/BrianRAG/issues"
+Changelog = "https://github.com/prodafe/BrianRAG/blob/main/CHANGELOG.md"
 
 [project.scripts]
 brianrag = "run:main"

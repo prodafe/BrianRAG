@@ -669,6 +669,80 @@ async def get_graph(node_limit: int = 200):
         return {"nodes": [], "edges": [], "stats": {"node_count": 0, "edge_count": 0}}
 
 
+class PlaygroundRequest(BaseModel):
+    question: str
+    mode: str = "rag"
+    top_k: int | None = None
+    alpha: float | None = None
+    score_threshold: float | None = None
+    enable_rerank: bool | None = None
+    enable_mmr: bool | None = None
+
+
+@app.post("/api/playground/query")
+async def playground_query(req: PlaygroundRequest):
+    """RAG 调试端点 — 返回全流程 trace 信息。"""
+    import time
+
+    pipeline = get_pipeline()
+    trace = {"steps": [], "timing_ms": {}}
+
+    try:
+        # Step 1: 意图分类
+        t0 = time.perf_counter()
+        intent = pipeline._classify_intent(req.question)
+        trace["timing_ms"]["intent"] = round((time.perf_counter() - t0) * 1000, 1)
+        trace["steps"].append({"step": "intent", "result": intent})
+
+        # Step 2: 检索
+        t0 = time.perf_counter()
+        if pipeline.retriever is None:
+            return {"answer": "检索器未初始化", "trace": trace}
+        candidate = pipeline.retriever.hybrid_search(req.question, top_k=req.top_k or 20)
+        trace["timing_ms"]["retrieval"] = round((time.perf_counter() - t0) * 1000, 1)
+        trace["steps"].append({
+            "step": "retrieval",
+            "candidate_count": len(candidate[0]) if candidate else 0,
+            "top_snippets": [c[:100] for c in (candidate[0] or [])[:3]],
+        })
+
+        # Step 3: 重排序（如果启用且在参数中请求）
+        rerank_scores = []
+        if req.enable_rerank is not False and pipeline.reranker and candidate and candidate[0]:
+            t0 = time.perf_counter()
+            try:
+                reranked = pipeline.reranker.rerank(req.question, candidate[0][:10], top_k=req.top_k or 5)
+                rerank_scores = [(text[:60], round(score, 3)) for score, _, text in reranked[:3]]
+                trace["timing_ms"]["rerank"] = round((time.perf_counter() - t0) * 1000, 1)
+            except Exception:
+                pass
+        trace["steps"].append({"step": "rerank", "top_scores": rerank_scores})
+
+        # Step 4: 生成
+        t0 = time.perf_counter()
+        context = candidate[0][: req.top_k or 5] if candidate else []
+        answer, citations = pipeline.generator.generate(req.question, context, intent=intent)
+        trace["timing_ms"]["generation"] = round((time.perf_counter() - t0) * 1000, 1)
+        trace["steps"].append({
+            "step": "generation",
+            "model": Config.llm_model,
+            "context_chunks": len(context),
+            "citation_count": len(citations),
+        })
+
+        trace["timing_ms"]["total"] = round(sum(trace["timing_ms"].values()), 1)
+
+        return {
+            "answer": answer,
+            "citations": citations,
+            "used_chunks": context,
+            "trace": trace,
+        }
+    except Exception as e:
+        logger.error(f"Playground 查询失败: {e}")
+        return {"answer": f"查询失败: {e}", "trace": trace}
+
+
 class PrewarmResponse(BaseModel):
     status: str = "ok"
     count: int = 0

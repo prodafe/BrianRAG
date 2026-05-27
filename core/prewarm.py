@@ -20,12 +20,10 @@ class PrewarmEngine:
         self.pipeline = pipeline
         self._redis_available = False
         try:
-            self.redis = redis.Redis(
-                host="localhost", port=6379, db=3, decode_responses=False, socket_connect_timeout=2
-            )
-            self.emb_redis = redis.Redis(
-                host="localhost", port=6379, db=3, decode_responses=True, socket_connect_timeout=2
-            )
+            from core.redis_client import get_redis
+
+            self.redis = get_redis(db=3, decode_responses=False, socket_connect_timeout=2)
+            self.emb_redis = get_redis(db=3, decode_responses=True, socket_connect_timeout=2)
             self.redis.ping()
             self._redis_available = True
         except Exception:

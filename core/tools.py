@@ -1,12 +1,68 @@
 """工具调用模块 — 给 Agent 提供实时计算/搜索/时间能力"""
 
+import ast
 import logging
 import math
+import operator as _op
 import re
 from datetime import datetime, timedelta
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
+# ── 安全的数学表达式求值器（替代 eval）──
+
+_SAFE_OPS = {
+    ast.Add: _op.add, ast.Sub: _op.sub, ast.Mult: _op.mul,
+    ast.Div: _op.truediv, ast.Pow: _op.pow, ast.USub: _op.neg,
+    ast.Mod: _op.mod, ast.FloorDiv: _op.floordiv,
+}
+
+_SAFE_FUNCS = {
+    "sqrt": math.sqrt, "sin": math.sin, "cos": math.cos, "tan": math.tan,
+    "log": math.log, "log10": math.log10, "pi": lambda: math.pi, "e": lambda: math.e,
+    "abs": abs, "round": round, "pow": pow, "ceil": math.ceil, "floor": math.floor,
+}
+
+
+def _safe_eval_node(node):
+    """递归求值 AST 节点，只允许安全的数学操作。"""
+    if isinstance(node, ast.Constant):
+        if isinstance(node.value, (int, float)):
+            return node.value
+        raise ValueError(f"不支持的常量: {node.value}")
+    elif isinstance(node, ast.BinOp):
+        op = _SAFE_OPS.get(type(node.op))
+        if not op:
+            raise ValueError(f"不安全的运算符: {type(node.op).__name__}")
+        return op(_safe_eval_node(node.left), _safe_eval_node(node.right))
+    elif isinstance(node, ast.UnaryOp):
+        op = _SAFE_OPS.get(type(node.op))
+        if not op:
+            raise ValueError(f"不安全的一元运算符: {type(node.op).__name__}")
+        return op(_safe_eval_node(node.operand))
+    elif isinstance(node, ast.Call):
+        if not isinstance(node.func, ast.Name):
+            raise ValueError("不支持属性调用")
+        func = _SAFE_FUNCS.get(node.func.id)
+        if not func:
+            raise ValueError(f"不支持的函数: {node.func.id}")
+        args = [_safe_eval_node(a) for a in node.args]
+        return func(*args)
+    elif isinstance(node, ast.Name):
+        func = _SAFE_FUNCS.get(node.id)
+        if func is not None:
+            val = func()
+            if isinstance(val, (int, float)):
+                return val
+        raise ValueError(f"不支持的变量: {node.id}")
+    raise ValueError(f"不支持的表达式节点: {type(node).__name__}")
+
+
+def _safe_math_eval(expr: str) -> float:
+    """安全地求值数学表达式，仅允许白名单运算符和函数。"""
+    tree = ast.parse(expr.strip(), mode="eval")
+    return _safe_eval_node(tree.body)
 
 # ── 工具注册表 ──
 _registry: dict[str, dict[str, Any]] = {}
@@ -54,24 +110,10 @@ def execute_tool_call(text: str) -> str | None:
 
 @register("calc", "数学计算，参数为数学表达式，如 `2+3*4` 或 `sqrt(16)`")
 def tool_calc(expr: str) -> str:
-    allowed = set("0123456789+-*/.()^% sqrtancosintabcdelmpr ")
-    safe = "".join(c for c in expr if c in allowed or c.isalpha() or c == "_")
-    namespace = {
-        "sqrt": math.sqrt,
-        "sin": math.sin,
-        "cos": math.cos,
-        "tan": math.tan,
-        "log": math.log,
-        "log10": math.log10,
-        "pi": math.pi,
-        "e": math.e,
-        "abs": abs,
-        "round": round,
-        "pow": pow,
-        "ceil": math.ceil,
-        "floor": math.floor,
-    }
-    result = eval(safe, {"__builtins__": {}}, namespace)
+    try:
+        result = _safe_math_eval(expr)
+    except Exception as e:
+        return f"计算错误: {e}"
     if isinstance(result, float):
         return f"{result:.6f}"
     return str(result)

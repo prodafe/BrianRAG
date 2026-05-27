@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import os
+import shutil
 import sys
 import time
 import uuid
@@ -12,6 +13,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import redis
 from apscheduler.schedulers.background import BackgroundScheduler
+from core.redis_client import get_redis, close_all as close_redis
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
@@ -157,6 +159,8 @@ def shutdown_watcher():
         _watcher_observer.stop()
         _watcher_observer.join()
         logger.info("目录监控已停止")
+    close_redis()
+    logger.info("Redis 连接池已关闭")
 
 
 # ---------- 历史相关 API ----------
@@ -302,7 +306,7 @@ async def start_indexing(req: IndexRequest):
 
             pipeline = RAGPipeline()
             num = pipeline.index_documents(req.file_paths, progress_callback=progress_cb, incremental=req.incremental)
-            r = redis.Redis(host="localhost", port=6379, db=0)
+            r = get_redis(db=0)
             r.set("docs:last_updated", time.time())
             r.publish("docs:changed", "update")
             _bg_tasks[task_id].update(state="SUCCESS", result={"status": "success", "num_chunks": num})
@@ -338,7 +342,7 @@ async def health(request: Request):
 
     # Redis（复用连接池）
     try:
-        r = redis.Redis(host="localhost", port=6379, db=0, socket_connect_timeout=2)
+        r = get_redis(db=0, socket_connect_timeout=2)
         r.ping()
         status["services"]["redis"] = "ok"
     except Exception:
@@ -349,11 +353,10 @@ async def health(request: Request):
     try:
         import psycopg
 
-        conn = psycopg.connect(
+        with psycopg.connect(
             Config.DATABASE_URL.replace("+psycopg://", "://").replace("+asyncpg://", "://"), connect_timeout=3
-        )
-        conn.execute("SELECT 1")
-        conn.close()
+        ) as conn:
+            conn.execute("SELECT 1")
         status["services"]["postgresql"] = "ok"
     except Exception:
         status["services"]["postgresql"] = "unavailable"
@@ -395,7 +398,19 @@ async def upload_files(files: list[UploadFile] = File(...)):
             extract_dir = os.path.join(upload_dir, os.path.splitext(safe_name)[0])
             os.makedirs(extract_dir, exist_ok=True)
             with zipfile.ZipFile(temp_zip, "r") as zip_ref:
-                zip_ref.extractall(extract_dir)
+                # 防御 Zip Slip 路径穿越
+                extract_base = os.path.normpath(extract_dir) + os.sep
+                for member in zip_ref.infolist():
+                    member_path = os.path.normpath(os.path.join(extract_dir, member.filename))
+                    if not member_path.startswith(extract_base):
+                        logger.warning(f"Zip Slip 攻击检测: {member.filename}")
+                        raise HTTPException(400, f"Zip 包含非法路径: {member.filename}")
+                    if member.is_dir():
+                        os.makedirs(member_path, exist_ok=True)
+                    else:
+                        os.makedirs(os.path.dirname(member_path), exist_ok=True)
+                        with zip_ref.open(member) as source, open(member_path, "wb") as target:
+                            shutil.copyfileobj(source, target)
             os.remove(temp_zip)
             for root, _dirs, files_in_extract in os.walk(extract_dir):
                 for fname in files_in_extract:
@@ -446,7 +461,7 @@ async def delete_document(file_hash: str):
 @app.get("/api/documents/last_updated")
 async def get_last_updated():
     try:
-        r = redis.Redis(host="localhost", port=6379, db=0, socket_connect_timeout=2)
+        r = get_redis(db=0, socket_connect_timeout=2)
         ts = r.get("docs:last_updated")
         return {"last_updated": float(ts) if ts else 0}
     except Exception:
@@ -481,7 +496,7 @@ async def record_feedback(req: FeedbackRequest):
 
     # negative 反馈存入 Redis 用于实时增强
     if req.feedback == "negative":
-        r = redis.Redis(host="localhost", port=6379, db=0, decode_responses=True)
+        r = get_redis(db=0, decode_responses=True)
         r.hset("feedback:negative", req.question, req.comment or "需要更详细的回答")
         r.expire("feedback:negative", Config.HOT_QUESTION_TTL)
 

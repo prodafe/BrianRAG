@@ -66,9 +66,18 @@ class GraphBuilder:
         self.entity_to_chunks.clear()
         for idx, chunk in enumerate(chunks):
             self.add_chunk(chunk, idx)
-        # 实体规范化（如果启用）
+        # 实体规范化（如果启用，带超时保护）
         if Config.ENABLE_ENTITY_NORMALIZATION and len(self.graph.nodes) > 1:
-            self.normalize_entities()
+            try:
+                from concurrent.futures import ThreadPoolExecutor, TimeoutError
+
+                with ThreadPoolExecutor(max_workers=1) as executor:
+                    future = executor.submit(self.normalize_entities)
+                    future.result(timeout=getattr(Config, "graph_normalize_timeout", 300))
+            except TimeoutError:
+                logger.warning("实体规范化超时，跳过合并")
+            except Exception as e:
+                logger.warning(f"实体规范化异常，跳过: {e}")
         return self.graph
 
     def update_from_chunks(self, new_chunks: list[str], start_idx: int):

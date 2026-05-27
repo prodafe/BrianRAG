@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 import jieba  # 用于分词生成高亮词
 import redis
 
-from config import Config
+from config import Config, config_override
 from core.generator import Generator
 from core.graph_builder import GraphBuilder
 
@@ -80,7 +80,9 @@ class RAGPipeline:
         self.generator = Generator()
         self._init_components()
         # 缓存配置 (使用 Redis db=1)
-        self.redis_client = redis.Redis(host="localhost", port=6379, db=1, decode_responses=True)
+        from core.redis_client import get_redis
+
+        self.redis_client = get_redis(db=1, decode_responses=True)
         self.cache_ttl = 3600  # 1小时
 
         # 意图分类器（如果可用）
@@ -646,14 +648,9 @@ class RAGPipeline:
         logger.info(f"意图分类结果: {intent}")
         dynamic_alpha, enable_multimodal = self._adjust_params_by_intent(intent)
 
-        original_alpha = Config.alpha
-        original_multimodal = Config.enable_multimodal
-        Config.alpha = dynamic_alpha
-        Config.enable_multimodal = enable_multimodal
-
         suggestion = None
 
-        try:
+        with config_override(alpha=dynamic_alpha, enable_multimodal=enable_multimodal):
             if intent == "image" and enable_multimodal:
                 multimodal_result = self.multimodal_query(question, history)
                 if multimodal_result.get("used_images"):
@@ -735,9 +732,6 @@ class RAGPipeline:
             }
             self._write_cache(cache_key, result)
             return result
-        finally:
-            Config.alpha = original_alpha
-            Config.enable_multimodal = original_multimodal
 
     def query_stream(self, question: str, history: list = None, stop_check=None):
         """
@@ -751,14 +745,9 @@ class RAGPipeline:
         yield '{"__phase__":"searching"}'
         intent = self._classify_intent(question)
         dynamic_alpha, enable_multimodal = self._adjust_params_by_intent(intent)
-        original_alpha = Config.alpha
-        original_multimodal = Config.enable_multimodal
-        Config.alpha = dynamic_alpha
-        Config.enable_multimodal = enable_multimodal
-
         suggestion = None
 
-        try:
+        with config_override(alpha=dynamic_alpha, enable_multimodal=enable_multimodal):
             if intent == "image" and enable_multimodal:
                 multimodal_result = self.multimodal_query(question, history)
                 if multimodal_result.get("used_images"):
@@ -819,9 +808,6 @@ class RAGPipeline:
             highlight_terms = self._generate_highlight_terms(question)
             # 流式结束前发送元数据
             yield json.dumps({"__meta__": True, "citations": citations, "used_chunks": text_chunks}, ensure_ascii=False)
-        finally:
-            Config.alpha = original_alpha
-            Config.enable_multimodal = original_multimodal
 
     def agentic_query(self, question: str, history: list = None) -> dict:
         if AGENTIC_AVAILABLE and run_agent is not None:

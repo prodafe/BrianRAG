@@ -66,9 +66,9 @@ class Generator:
         try:
             import json as _json
 
-            import redis as _rds
+            from core.redis_client import get_redis
 
-            rc = _rds.Redis(host="localhost", port=6379, db=0, decode_responses=True)
+            rc = get_redis(db=0, decode_responses=True)
             if rc.exists("feedback:negative"):
                 return
             fb_file = os.path.join(Config.BASE_DIR, "feedback.jsonl")
@@ -87,9 +87,9 @@ class Generator:
         try:
             from difflib import SequenceMatcher
 
-            import redis as _rds
+            from core.redis_client import get_redis
 
-            rc = _rds.Redis(host="localhost", port=6379, db=0, decode_responses=True)
+            rc = get_redis(db=0, decode_responses=True)
             all_neg = rc.hgetall("feedback:negative")
             for neg_q, comment in all_neg.items():
                 if SequenceMatcher(None, question, neg_q).ratio() > 0.6:

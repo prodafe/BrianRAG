@@ -1,6 +1,8 @@
 """BrianRAG 配置 — pydantic-settings，自动从 .env / 环境变量加载"""
 
+import contextlib
 import os
+import threading
 
 try:
     from pydantic_settings import BaseSettings
@@ -54,6 +56,13 @@ if BaseSettings is not object:
         rerank_use_fp16: bool = True
         rerank_top_k: int = 3
         rerank_candidate_multiplier: int = 2
+
+        # ── 超时（秒）──
+        llm_generate_timeout: int = 120
+        llm_stream_timeout: int = 300
+        embedding_timeout: int = 60
+        vision_timeout: int = 120
+        graph_normalize_timeout: int = 300
 
         # ── 嵌入 ──
         embedding_binding: str = "ollama"
@@ -226,6 +235,11 @@ else:
             self.embedding_model = "bge-m3:latest"
             self.embedding_dim = 1024
             self.embedding_binding_host = "http://localhost:11434"
+            self.llm_generate_timeout = 120
+            self.llm_stream_timeout = 300
+            self.embedding_timeout = 60
+            self.vision_timeout = 120
+            self.graph_normalize_timeout = 300
             self.llm_provider = "ollama"
             self.llm_model = "qwen2.5:7b"
             self.ollama_base_url = "http://localhost:11434"
@@ -342,3 +356,41 @@ if BaseSettings is object:
                             setattr(Config, _attr, _val)
 
 # 兼容旧代码：_Settings.__getattr__ 自动将 UPPER_CASE 映射到 lower_case
+
+
+# ── 线程安全的临时配置覆写 ──
+_SENTINEL = object()
+_overrides = threading.local()
+
+
+@contextlib.contextmanager
+def config_override(**kwargs):
+    """线程安全的临时配置覆写。
+
+    Usage:
+        with config_override(alpha=0.3, enable_multimodal=False):
+            pipeline.query("...")
+    """
+    saved = {}
+    for k in kwargs:
+        saved[k] = getattr(_overrides, k, _SENTINEL)
+        setattr(_overrides, k, kwargs[k])
+    try:
+        yield
+    finally:
+        for k, prev in saved.items():
+            if prev is _SENTINEL:
+                try:
+                    delattr(_overrides, k)
+                except AttributeError:
+                    pass
+            else:
+                setattr(_overrides, k, prev)
+
+
+def _get_config(name: str):
+    """读取配置值，优先使用当前线程的覆写。"""
+    v = getattr(_overrides, name, _SENTINEL)
+    if v is not _SENTINEL:
+        return v
+    return getattr(Config, name, getattr(Config, name.upper(), None))

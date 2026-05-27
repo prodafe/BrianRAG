@@ -25,7 +25,7 @@ from rank_bm25 import BM25Okapi
 from sqlalchemy import create_engine, text
 from transformers import CLIPModel, CLIPProcessor
 
-from config import Config
+from config import Config, _get_config
 from core.intent_classifier import IntentClassifier
 
 # METRICS: 导入指标记录函数
@@ -35,6 +35,9 @@ from utils.document_loader import load_single_document
 logger = logging.getLogger(__name__)
 
 # Module-level shared cache: avoids reloading chunks for each HybridRetriever instance
+import threading
+
+_shared_lock = threading.RLock()
 _shared = {
     "chunks": None,
     "chunk_metadata": None,
@@ -43,6 +46,16 @@ _shared = {
     "doc_meta": None,
     "graph_builder": None,
 }
+
+
+def _get_shared(key: str):
+    with _shared_lock:
+        return _shared.get(key)
+
+
+def _set_shared(key: str, value):
+    with _shared_lock:
+        _shared[key] = value
 
 
 class OllamaEmbeddings(Embeddings):
@@ -403,10 +416,10 @@ class HybridRetriever:
         # 多模态检索器（懒加载 + 健壮降级）
         self._clip_retriever = None
         self._multimodal_available = False
-        if Config.ENABLE_MULTIMODAL and self._init_success:
+        if _get_config("enable_multimodal") and self._init_success:
             logger.info("多模态检索已启用，将在首次使用时尝试加载模型")
         else:
-            if not Config.ENABLE_MULTIMODAL:
+            if not _get_config("enable_multimodal"):
                 logger.info("多模态检索未启用（配置关闭）")
             elif not self._init_success:
                 logger.warning("多模态检索未启用（数据库未就绪）")
@@ -432,7 +445,7 @@ class HybridRetriever:
     @property
     def clip_retriever(self):
         """懒加载 CLIP 检索器，首次访问时实例化，并更新可用标志。失败后不再重试。"""
-        if self._clip_retriever is None and Config.ENABLE_MULTIMODAL and self._init_success:
+        if self._clip_retriever is None and _get_config("enable_multimodal") and self._init_success:
             # 检查是否已确认不可用（避免重复尝试导致大量 traceback）
             if getattr(self, "_clip_failed", False):
                 return None
@@ -467,7 +480,7 @@ class HybridRetriever:
 
     def _sync_multimodal_index(self):
         """将当前所有图片类型的 chunk 同步到多模态检索器（仅在可用时执行）"""
-        if not (Config.ENABLE_MULTIMODAL and self._init_success and self._multimodal_available):
+        if not (_get_config("enable_multimodal") and self._init_success and self._multimodal_available):
             return
         if self._clip_retriever is None:
             return
@@ -507,8 +520,8 @@ class HybridRetriever:
         根据文本查询多模态图片检索结果，返回 (Document列表, 分数列表)。
         每个 Document 的 page_content 包含图片 Markdown 链接和描述，便于 LLM 直接输出图片。
         """
-        if not (Config.ENABLE_MULTIMODAL and self._init_success and self._multimodal_available):
-            if Config.ENABLE_MULTIMODAL and self._init_success and not self._multimodal_available:
+        if not (_get_config("enable_multimodal") and self._init_success and self._multimodal_available):
+            if _get_config("enable_multimodal") and self._init_success and not self._multimodal_available:
                 logger.debug("多模态检索跳过：模型未加载或加载失败")
             return [], []
         if self._clip_retriever is None:
@@ -570,9 +583,9 @@ class HybridRetriever:
         uncached_indices = []
         uncached_texts = []
         try:
-            import redis as rds
+            from core.redis_client import get_redis
 
-            rc = rds.Redis(host="localhost", port=6379, db=2, decode_responses=False)
+            rc = get_redis(db=2, decode_responses=False)
             for i, t in enumerate(texts):
                 key = f"emb:{hashlib.md5(t.encode()).hexdigest()}"
                 val = rc.get(key)
@@ -593,9 +606,9 @@ class HybridRetriever:
                     cached[i] = emb
                 # 写入 Redis 缓存
                 try:
-                    import redis as _rds
+                    from core.redis_client import get_redis
 
-                    _rc = _rds.Redis(host="localhost", port=6379, db=2, decode_responses=False)
+                    _rc = get_redis(db=2, decode_responses=False)
                     pipe = _rc.pipeline()
                     for t, emb in zip(uncached_texts, embeddings, strict=False):
                         key = f"emb:{hashlib.md5(t.encode()).hexdigest()}"
@@ -635,13 +648,14 @@ class HybridRetriever:
 
     def _load_chunks_data(self):
         # Check shared cache first
-        if _shared["chunks"] is not None:
-            self.chunks = _shared["chunks"]
-            self.chunk_metadata = _shared["chunk_metadata"]
-            self.chunk_images = _shared["chunk_images"]
-            self.bm25 = _shared["bm25"]
-            self.doc_meta = _shared["doc_meta"]
-            self.graph_builder = _shared["graph_builder"]
+        chunks = _get_shared("chunks")
+        if chunks is not None:
+            self.chunks = chunks
+            self.chunk_metadata = _get_shared("chunk_metadata")
+            self.chunk_images = _get_shared("chunk_images")
+            self.bm25 = _get_shared("bm25")
+            self.doc_meta = _get_shared("doc_meta")
+            self.graph_builder = _get_shared("graph_builder")
             logger.info(f"从共享缓存加载 {len(self.chunks)} 个文本块（跳过重复加载）")
             return
 
@@ -661,9 +675,9 @@ class HybridRetriever:
             logger.info("chunks_data.pkl 不存在")
 
         # Populate shared cache
-        _shared["chunks"] = self.chunks
-        _shared["chunk_metadata"] = self.chunk_metadata
-        _shared["chunk_images"] = self.chunk_images
+        _set_shared("chunks", self.chunks)
+        _set_shared("chunk_metadata", self.chunk_metadata)
+        _set_shared("chunk_images", self.chunk_images)
 
     def _restore_chunks_from_db(self) -> bool:
         if not self._init_success:
@@ -697,15 +711,15 @@ class HybridRetriever:
             return False
 
     def _rebuild_bm25(self):
-        if _shared["bm25"] is not None and _shared["chunks"] is self.chunks:
-            self.bm25 = _shared["bm25"]
+        if _get_shared("bm25") is not None and _get_shared("chunks") is self.chunks:
+            self.bm25 = _get_shared("bm25")
             return
         if not self.chunks:
             logger.warning("chunks 为空，跳过 BM25 构建")
             return
         tokenized = [list(jieba.cut(c)) for c in self.chunks]
         self.bm25 = BM25Okapi(tokenized)
-        _shared["bm25"] = self.bm25
+        _set_shared("bm25", self.bm25)
         logger.info(f"BM25 索引构建完成，文档数: {len(self.chunks)}")
 
     def _bm25_scores(self, query: str) -> list:
@@ -739,7 +753,7 @@ class HybridRetriever:
             logger.info("全量重建索引：清空现有向量表...")
             try:
                 with self.db_engine.connect() as conn:
-                    conn.execute(f"DROP TABLE IF EXISTS {self.table_name}")
+                    conn.execute(f"DROP TABLE IF EXISTS {self.table_name}")  # table_name validated at init
                     conn.commit()
             except Exception as e:
                 logger.warning(f"删除旧表失败: {e}")
@@ -873,7 +887,7 @@ class HybridRetriever:
 
         # 多模态索引同步（增量添加图片） - 修复路径处理
         if (
-            Config.ENABLE_MULTIMODAL
+            _get_config("enable_multimodal")
             and self._init_success
             and self._multimodal_available
             and self._clip_retriever is not None
@@ -972,7 +986,7 @@ class HybridRetriever:
             alpha = self._get_dynamic_alpha(query)
             logger.debug(f"动态 alpha 计算: {alpha}")
         else:
-            alpha = Config.ALPHA
+            alpha = _get_config("alpha")
 
         # 数据同步（首次同步后跳过）
         if not self.is_loaded:
@@ -1034,7 +1048,7 @@ class HybridRetriever:
             os.remove(self.chunks_data_path)
             logger.info("所有文档已删除，已清理 chunks 数据")
         if (
-            Config.ENABLE_MULTIMODAL
+            _get_config("enable_multimodal")
             and self._init_success
             and self._multimodal_available
             and self._clip_retriever is not None
@@ -1084,7 +1098,7 @@ class HybridRetriever:
             future_bm25 = executor.submit(self._bm25_scores, query)
             future_graph = executor.submit(self._retrieve_from_graph, query, top_k)
             # 只有多模态可用时才提交任务
-            if Config.ENABLE_MULTIMODAL and self._init_success and self._multimodal_available:
+            if _get_config("enable_multimodal") and self._init_success and self._multimodal_available:
                 future_multimodal = executor.submit(self.multimodal_search, query, Config.MULTIMODAL_TOP_K)
             else:
                 future_multimodal = None

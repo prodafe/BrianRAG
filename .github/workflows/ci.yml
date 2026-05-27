@@ -17,8 +17,12 @@ jobs:
         with:
           python-version: "3.11"
       - run: pip install "ruff>=0.6"
-      - run: ruff --version && git log -1 --oneline
-      - run: ruff check . --select=E,F,W --ignore=E402,E501,E701,E702,E722,E741,F402,F841
+      - run: |
+          echo "=== ruff version ===" && ruff --version
+          echo "=== git commit ===" && git log -1 --oneline
+          echo "=== working dir ===" && pwd && ls -la
+          echo "=== pyproject.toml ===" && head -120 pyproject.toml
+      - run: ruff check .
 
   test:
     runs-on: ubuntu-latest

@@ -359,10 +359,21 @@ class UnifiedDocumentLoader:
 def load_single_document(file_path: str) -> list[Document]:
     ext = os.path.splitext(file_path)[1].lower()
 
-    # PDF：优先用版式分析器（大文件跳过，避免超时/内存溢出）
+    # PDF：优先用版式分析器（大文件直接用 PyMuPDF 避免超时）
     if ext == ".pdf":
         if os.path.getsize(file_path) > 20 * 1024 * 1024:
-            logger.info(f"PDF 过大 ({os.path.getsize(file_path) // 1024 // 1024}MB)，跳过版式分析: {file_path}")
+            size_mb = os.path.getsize(file_path) // 1024 // 1024
+            logger.info(f"PDF 过大 ({size_mb}MB)，使用 PyMuPDF 快速提取: {file_path}")
+            try:
+                import fitz
+                doc = fitz.open(file_path)
+                text = "\n".join(page.get_text() for page in doc)
+                doc.close()
+                if text.strip():
+                    return [Document(page_content=text, metadata={"source": file_path, "type": "pdf_pymupdf"})]
+            except Exception as e:
+                logger.warning(f"PyMuPDF 提取失败: {e}")
+            return []
         else:
             try:
                 from utils.layout_analyzer import analyze_pdf_layout, pdf_has_text_layer

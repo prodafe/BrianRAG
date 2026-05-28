@@ -6,10 +6,9 @@
 
 from __future__ import annotations
 
-import json
 import logging
 import time
-from collections.abc import Callable, Sequence
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
@@ -59,7 +58,7 @@ class Workflow:
         }
 
     @classmethod
-    def from_dict(cls, d: dict) -> "Workflow":
+    def from_dict(cls, d: dict) -> Workflow:
         nodes = [WorkflowNode(id=n["id"], type=NodeType(n["type"]), label=n.get("label", ""),
                               config=n.get("config", {}), position=n.get("position", {})) for n in d.get("nodes", [])]
         edges = [WorkflowEdge(source=e["source"], target=e["target"], label=e.get("label", ""),

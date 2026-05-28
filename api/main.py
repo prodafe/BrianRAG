@@ -11,9 +11,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import redis
 from apscheduler.schedulers.background import BackgroundScheduler
-from core.redis_client import get_redis, close_all as close_redis
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
@@ -26,6 +24,8 @@ from slowapi.util import get_remote_address
 from config import Config
 from core.metrics import metrics_endpoint
 from core.rag_pipeline import RAGPipeline
+from core.redis_client import close_all as close_redis
+from core.redis_client import get_redis
 from core.telemetry import setup_telemetry
 from utils.dir_watcher import start_watcher
 from utils.history_manager import HistoryManager

@@ -11,7 +11,6 @@ from difflib import SequenceMatcher
 logger = logging.getLogger(__name__)
 
 import jieba  # 用于分词生成高亮词
-import redis
 
 from config import Config, config_override
 from core.generator import Generator

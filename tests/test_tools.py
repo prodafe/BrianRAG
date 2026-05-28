@@ -1,6 +1,7 @@
 """Tests for core/tools.py — safe math evaluator"""
 
 import pytest
+
 from core.tools import _safe_math_eval
 
 
@@ -12,7 +13,6 @@ class TestSafeMathEval:
         assert abs(_safe_math_eval("sqrt(16)") - 4.0) < 0.001
 
     def test_sin(self):
-        import math
         assert abs(_safe_math_eval("sin(pi/2)") - 1.0) < 0.001
 
     def test_nested_expr(self):

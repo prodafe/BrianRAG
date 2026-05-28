@@ -1,6 +1,5 @@
 """多 Agent 协作测试"""
 
-import pytest
 
 
 class TestMultiAgentOrchestrator:
@@ -13,7 +12,6 @@ class TestMultiAgentOrchestrator:
 
     def test_planner_think(self, monkeypatch):
         monkeypatch.setattr("core.llm_provider.get_llm_provider", lambda: _MockLLM())
-        from core.rag_pipeline import RAGPipeline
 
         class MockPipeline:
             generator = type("_", (), {"_llm": _MockLLM()})()
@@ -27,7 +25,6 @@ class TestMultiAgentOrchestrator:
 
     def test_critic_review(self, monkeypatch):
         monkeypatch.setattr("core.llm_provider.get_llm_provider", lambda: _MockLLM())
-        from core.rag_pipeline import RAGPipeline
 
         class MockPipeline:
             generator = type("_", (), {"_llm": _MockLLM()})()

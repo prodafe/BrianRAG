@@ -1,6 +1,5 @@
 """查询分解测试"""
 
-import pytest
 
 
 class MockLLM:

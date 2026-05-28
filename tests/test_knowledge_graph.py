@@ -1,6 +1,5 @@
 """知识图谱模块测试"""
 
-import pytest
 
 
 class TestGraphBuilder:

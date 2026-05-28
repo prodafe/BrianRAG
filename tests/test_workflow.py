@@ -1,8 +1,12 @@
 """工作流引擎测试"""
 
-import pytest
 from core.workflow_engine import (
-    NodeType, WorkflowNode, WorkflowEdge, Workflow, WorkflowEngine, BUILTIN_TEMPLATES,
+    BUILTIN_TEMPLATES,
+    NodeType,
+    Workflow,
+    WorkflowEdge,
+    WorkflowEngine,
+    WorkflowNode,
 )
 
 

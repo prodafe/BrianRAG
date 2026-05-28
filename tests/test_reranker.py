@@ -1,6 +1,5 @@
 """Reranker 模块测试"""
 
-import pytest
 
 
 class TestRerankerUnit:

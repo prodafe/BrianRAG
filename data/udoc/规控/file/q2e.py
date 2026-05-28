@@ -1,8 +1,6 @@
 import rospy
-import numpy as np
-import tf
-from tf.transformations import *
 from geometry_msgs.msg import PoseStamped
+from tf.transformations import *
 
 x_sum=0
 y_sum=0
@@ -34,7 +32,7 @@ def callback(data):
         x_sum=0
         y_sum=0
         yaw_sum=0
-        count=0    
+        count=0
 rospy.init_node("side_dock_calibrating",anonymous=True)
 rospy.Subscriber("/pose_in_tag",PoseStamped ,callback)
 sleep(6)

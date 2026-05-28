@@ -5,7 +5,6 @@ import logging
 import time
 
 import numpy as np
-import redis
 
 from config import Config
 

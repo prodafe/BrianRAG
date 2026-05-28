@@ -201,8 +201,8 @@ def tool_search(query: str) -> str:
 def tool_code(code: str) -> str:
     """受限的 Python 代码沙箱。仅允许安全的内置函数和白名单模块。"""
     import ast as _ast
-    import math as _math
     import json as _json
+    import math as _math
 
     safe_builtins = {
         "abs": abs, "all": all, "any": any, "bool": bool, "chr": chr,
@@ -260,9 +260,9 @@ def tool_code(code: str) -> str:
 def tool_api(arg: str) -> str:
     """调用 HTTP API 获取实时数据"""
     try:
-        import urllib.request
-        import urllib.error
         import json as _json
+        import urllib.error
+        import urllib.request
 
         parts = arg.strip().split("|", 2)
         method = parts[0].upper() if parts else "GET"
@@ -303,6 +303,7 @@ def tool_api(arg: str) -> str:
 def tool_file_read(path: str) -> str:
     """安全读取 data/ 目录下的文件"""
     import os
+
     from config import Config
 
     clean = os.path.basename(path.strip())

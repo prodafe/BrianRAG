@@ -45,7 +45,7 @@ class TestRedisClient:
         pools.clear()
         monkeypatch.setattr("redis.Redis", lambda **kw: _FakeRedis())
 
-        from core.redis_client import get_redis, close_all
+        from core.redis_client import close_all, get_redis
 
         get_redis(db=0)
         assert len(pools) >= 1

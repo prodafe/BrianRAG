@@ -1,6 +1,5 @@
 """TOC 提取 + 数据源连接器测试"""
 
-import pytest
 
 
 class TestTOCExtraction:
@@ -42,9 +41,10 @@ class TestTOCExtraction:
         assert result == []
 
     def test_auto_extract_toc_md(self):
-        from utils.data_connectors import auto_extract_toc
-        import tempfile
         import os
+        import tempfile
+
+        from utils.data_connectors import auto_extract_toc
 
         with tempfile.NamedTemporaryFile(suffix=".md", mode="w", encoding="utf-8", delete=False) as f:
             f.write("# Doc Title\n## Intro\nContent here\n## Details\nMore content")

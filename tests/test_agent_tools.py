@@ -1,6 +1,5 @@
 """Agent 工具测试 — calc/time/unit/search/code/api/file"""
 
-import pytest
 
 
 class TestCalcTool:

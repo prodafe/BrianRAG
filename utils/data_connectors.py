@@ -9,7 +9,6 @@ import json
 import logging
 import os
 import re
-from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -121,8 +120,8 @@ class NotionConnector:
         }
 
     def _request(self, endpoint: str, method: str = "GET", data: dict = None) -> dict:
-        import urllib.request
         import urllib.error
+        import urllib.request
 
         url = f"{self.base_url}{endpoint}"
         req = urllib.request.Request(url, method=method, headers=self.headers)
@@ -298,8 +297,9 @@ class ConfluenceConnector:
         return {"Authorization": f"Basic {creds}", "Accept": "application/json"}
 
     def search_pages(self, query: str = "", space: str = "", limit: int = 10) -> list[dict]:
-        import urllib.request, json as _json
-        cql = f"type=page"
+        import json as _json
+        import urllib.request
+        cql = "type=page"
         if query: cql += f" AND text~\"{query}\""
         if space: cql += f" AND space=\"{space}\""
         url = f"{self.base_url}/rest/api/content/search?cql={urllib.parse.quote(cql)}&limit={limit}&expand=body.storage"
@@ -312,7 +312,8 @@ class ConfluenceConnector:
             return []
 
     def get_page(self, page_id: str) -> str:
-        import urllib.request, json as _json
+        import json as _json
+        import urllib.request
         url = f"{self.base_url}/rest/api/content/{page_id}?expand=body.storage"
         req = urllib.request.Request(url, headers=self._headers())
         try:
@@ -373,8 +374,8 @@ class GoogleDriveConnector:
         svc = self._get_service()
         if not svc: return False
         try:
+
             from googleapiclient.http import MediaIoBaseDownload
-            import io
             request = svc.files().get_media(fileId=file_id)
             with open(local_path, "wb") as f:
                 downloader = MediaIoBaseDownload(f, request)
@@ -405,8 +406,9 @@ class WebDAVConnector:
         self.password = password or os.getenv("WEBDAV_PASS", "")
 
     def list_files(self, path: str = "", depth: int = 1) -> list[dict]:
+        import base64
+        import urllib.request
         import xml.etree.ElementTree as ET
-        import urllib.request, base64
 
         full_url = f"{self.url}/{path.lstrip('/')}" if path else self.url
         req = urllib.request.Request(full_url, method="PROPFIND")
@@ -432,8 +434,9 @@ class WebDAVConnector:
             return []
 
     def download_file(self, remote_path: str, local_path: str) -> bool:
-        import urllib.request, base64
+        import base64
         import os as _os
+        import urllib.request
 
         full_path = f"{self.url}/{remote_path.lstrip('/')}" if self.url not in remote_path else remote_path
         req = urllib.request.Request(full_path)
@@ -464,8 +467,8 @@ class RSSConnector:
     """
 
     def fetch(self, feed_url: str, max_entries: int = 20) -> list[dict]:
-        import xml.etree.ElementTree as ET
         import urllib.request
+        import xml.etree.ElementTree as ET
 
         try:
             req = urllib.request.Request(feed_url, headers={"User-Agent": "BrianRAG/2.4"})
@@ -535,7 +538,9 @@ class _HTTPConnector:
     _auth_headers: dict = {}
 
     def _get(self, path: str, params: dict = None) -> dict:
-        import urllib.request, urllib.parse, json as _json
+        import json as _json
+        import urllib.parse
+        import urllib.request
         url = f"{self.base}{path}"
         if params: url += "?" + urllib.parse.urlencode(params)
         req = urllib.request.Request(url, headers={**self._auth_headers, "Accept": "application/json", "User-Agent": "BrianRAG/2.4"})
@@ -581,15 +586,17 @@ class SlackConnector:
         self.token = token or os.getenv("SLACK_TOKEN", "")
 
     def list_channels(self) -> list[dict]:
-        import urllib.request, json as _json
-        req = urllib.request.Request(f"https://slack.com/api/conversations.list?limit=100", headers={"Authorization": f"Bearer {self.token}"})
+        import json as _json
+        import urllib.request
+        req = urllib.request.Request("https://slack.com/api/conversations.list?limit=100", headers={"Authorization": f"Bearer {self.token}"})
         try:
             with urllib.request.urlopen(req, timeout=10) as r:
                 return _json.loads(r.read()).get("channels", [])
         except Exception: return []
 
     def fetch_messages(self, channel_id: str, limit: int = 50) -> list[dict]:
-        import urllib.request, json as _json
+        import json as _json
+        import urllib.request
         url = f"https://slack.com/api/conversations.history?channel={channel_id}&limit={limit}"
         req = urllib.request.Request(url, headers={"Authorization": f"Bearer {self.token}"})
         try:
@@ -622,7 +629,9 @@ class GitLabConnector(_HTTPConnector):
     def list_projects(self) -> list[dict]: return self._get("/projects?membership=true")
     def list_files(self, project_id, path: str = "") -> list[dict]: return self._get(f"/projects/{project_id}/repository/tree?path={path}")
     def get_file(self, project_id, file_path: str) -> str:
-        import urllib.request, base64, json as _json
+        import base64
+        import json as _json
+        import urllib.request
         url = f"{self.base}/projects/{project_id}/repository/files/{urllib.parse.quote(file_path,'')}?ref=main"
         req = urllib.request.Request(url, headers=self._auth_headers)
         try:
@@ -639,7 +648,8 @@ class DropboxConnector:
         self.token = token or os.getenv("DROPBOX_TOKEN", "")
 
     def _api(self, path: str, data: dict = None) -> dict:
-        import urllib.request, json as _json
+        import json as _json
+        import urllib.request
         url = "https://api.dropboxapi.com/2" + path
         req = urllib.request.Request(url, headers={"Authorization": f"Bearer {self.token}", "Content-Type": "application/json"}, method="POST")
         if data: req.data = _json.dumps(data).encode()
@@ -669,7 +679,8 @@ class OneDriveConnector:
         self.token = token or os.getenv("ONEDRIVE_TOKEN", "")
 
     def _graph(self, path: str) -> dict:
-        import urllib.request, json as _json
+        import json as _json
+        import urllib.request
         req = urllib.request.Request(f"https://graph.microsoft.com/v1.0{path}", headers={"Authorization": f"Bearer {self.token}"})
         try:
             with urllib.request.urlopen(req, timeout=15) as r:
@@ -708,7 +719,8 @@ class TrelloConnector:
         self.token = token or os.getenv("TRELLO_TOKEN", "")
 
     def _get(self, path: str) -> dict:
-        import urllib.request, json as _json
+        import json as _json
+        import urllib.request
         url = f"https://api.trello.com/1{path}?key={self.key}&token={self.token}"
         try:
             with urllib.request.urlopen(url, timeout=10) as r:
@@ -740,7 +752,8 @@ class DingTalkConnector:
 
     def _get_token(self) -> str:
         if self._token: return self._token
-        import urllib.request, json as _json
+        import json as _json
+        import urllib.request
         url = f"https://oapi.dingtalk.com/gettoken?appkey={self.key}&appsecret={self.secret}"
         try:
             with urllib.request.urlopen(url, timeout=10) as r:
@@ -749,7 +762,8 @@ class DingTalkConnector:
         return self._token
 
     def list_departments(self) -> list[dict]:
-        import urllib.request, json as _json
+        import json as _json
+        import urllib.request
         token = self._get_token()
         url = f"https://oapi.dingtalk.com/topapi/v2/department/listsub?access_token={token}"
         req = urllib.request.Request(url, data=b"{}", headers={"Content-Type": "application/json"})
@@ -769,7 +783,8 @@ class FeishuConnector:
 
     def _get_token(self) -> str:
         if self._token: return self._token
-        import urllib.request, json as _json
+        import json as _json
+        import urllib.request
         data = _json.dumps({"app_id": self.app_id, "app_secret": self.secret}).encode()
         req = urllib.request.Request("https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal", data=data, headers={"Content-Type": "application/json"}, method="POST")
         try:
@@ -779,7 +794,8 @@ class FeishuConnector:
         return self._token
 
     def list_docs(self, page_size: int = 50) -> list[dict]:
-        import urllib.request, json as _json
+        import json as _json
+        import urllib.request
         token = self._get_token()
         url = f"https://open.feishu.cn/open-apis/drive/v1/files?page_size={page_size}"
         req = urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})
@@ -799,7 +815,8 @@ class IMAPConnector:
 
     def fetch_emails(self, folder: str = "INBOX", limit: int = 20) -> list[dict]:
         try:
-            import imaplib, email as _email
+            import email as _email
+            import imaplib
             conn = imaplib.IMAP4_SSL(self.server)
             conn.login(self.email, self.password)
             conn.select(folder)

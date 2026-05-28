@@ -1,9 +1,8 @@
 # !/usr/bin/python
-# -*- coding: utf-8 -*-
-import socket
-import datetime
-import sys
 import binascii
+import socket
+import sys
+
 # Lidar
 # 雷达的以太网的IP
 LIDAR_ETH_IP = "10.8.8.222" #----------注意ip
@@ -50,13 +49,13 @@ class MACAddress:
         self.addr = addr
 
     def __str__(self):
-        return ':'.join('{:02x}'.format(a) for a in self.addr.to_bytes(6, BIG_ENDIAN))
+        return ':'.join(f'{a:02x}' for a in self.addr.to_bytes(6, BIG_ENDIAN))
 
     def __repr__(self):
         return self.__str__()
 
 # 以太网包头基础类
-class EthernetHeader(object):
+class EthernetHeader:
     def __init__(self, dst_mac, src_mac):
         self.dst_mac = dst_mac
         self.src_mac = src_mac
@@ -83,7 +82,7 @@ class EthernetIIHeader(EthernetHeader):
     def _describe_eth_type(eth_type):
         if eth_type in ETH_TYPE_MAP:
             return ETH_TYPE_MAP[eth_type]
-        return 'Unknown protocol {}'.format(eth_type)
+        return f'Unknown protocol {eth_type}'
 
 # 以太网802.3版协议包头类
 class Ethernet802_3Header(EthernetHeader):

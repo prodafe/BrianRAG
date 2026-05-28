@@ -1,6 +1,5 @@
 """Memory 系统测试"""
 
-import pytest
 
 
 class TestMemoryEntry:
@@ -94,7 +93,7 @@ class TestGetUserMemory:
     def test_caching_same_user(self, monkeypatch):
         monkeypatch.setattr("core.memory.UserMemory._load", lambda s: setattr(s, "_loaded", True))
 
-        from core.memory import get_user_memory, _user_memories
+        from core.memory import _user_memories, get_user_memory
 
         _user_memories.clear()
         m1 = get_user_memory("alice")
@@ -104,7 +103,7 @@ class TestGetUserMemory:
     def test_different_users(self, monkeypatch):
         monkeypatch.setattr("core.memory.UserMemory._load", lambda s: setattr(s, "_loaded", True))
 
-        from core.memory import get_user_memory, _user_memories
+        from core.memory import _user_memories, get_user_memory
 
         _user_memories.clear()
         m1 = get_user_memory("alice")

@@ -1,6 +1,5 @@
 """Tests for core/model_router.py"""
 
-import pytest
 from core.model_router import ModelRouter
 
 

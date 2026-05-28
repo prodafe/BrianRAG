@@ -3,8 +3,6 @@
 import os
 import tempfile
 
-import pytest
-
 
 class TestLoadSingleDocument:
     def test_missing_file_returns_empty(self):
@@ -13,7 +11,7 @@ class TestLoadSingleDocument:
         assert docs == []
 
     def test_md_file_loaded(self):
-        from utils.document_loader import load_single_document, _register_builtins
+        from utils.document_loader import _register_builtins, load_single_document
 
         _register_builtins()
         with tempfile.NamedTemporaryFile(suffix=".md", mode="w", encoding="utf-8", delete=False) as f:
@@ -28,7 +26,7 @@ class TestLoadSingleDocument:
             os.unlink(tmp_path)
 
     def test_image_file_generates_image_doc(self):
-        from utils.document_loader import load_single_document, _register_builtins
+        from utils.document_loader import _register_builtins, load_single_document
 
         _register_builtins()
         from PIL import Image
@@ -57,7 +55,7 @@ class TestLoadSingleDocument:
 
 class TestMarkdownDocumentLoader:
     def test_basic_load(self):
-        from utils.document_loader import MarkdownDocumentLoader, Config
+        from utils.document_loader import MarkdownDocumentLoader
 
         with tempfile.NamedTemporaryFile(suffix=".md", mode="w", encoding="utf-8", delete=False) as f:
             f.write("# Title\n\nParagraph one.\n\n## Sub\n\nParagraph two with more text content for testing.")
@@ -106,7 +104,7 @@ class TestGetFileHash:
 
 class TestLoaderRegistry:
     def test_builtin_registry_populated(self):
-        from utils.document_loader import _register_builtins, _loader_registry
+        from utils.document_loader import _loader_registry, _register_builtins
 
         _register_builtins()
         assert ".md" in _loader_registry
@@ -115,8 +113,9 @@ class TestLoaderRegistry:
         assert ".png" in _loader_registry
 
     def test_custom_loader_registration(self):
-        from utils.document_loader import register_loader, _loader_registry
         from langchain_core.documents import Document
+
+        from utils.document_loader import _loader_registry, register_loader
 
         @register_loader([".custom"])
         def custom_loader(file_path: str):
@@ -128,7 +127,7 @@ class TestLoaderRegistry:
         assert docs[0].page_content == "custom"
 
     def test_get_registered_loaders(self):
-        from utils.document_loader import get_registered_loaders, _register_builtins
+        from utils.document_loader import _register_builtins, get_registered_loaders
 
         _register_builtins()
         loaders = get_registered_loaders()

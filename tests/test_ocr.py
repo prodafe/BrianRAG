@@ -1,6 +1,5 @@
 """OCR 模块测试"""
 
-import pytest
 
 
 class TestOCREngineStatus:
@@ -30,11 +29,12 @@ class TestScannedPDF:
 
 class TestOCRResize:
     def test_resize_small_image_noop(self):
-        from utils.ocr import _resize_for_ocr
+        import os
+        import tempfile
 
         from PIL import Image
-        import tempfile
-        import os
+
+        from utils.ocr import _resize_for_ocr
 
         img = Image.new("RGB", (100, 100), color="white")
         with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
@@ -48,11 +48,12 @@ class TestOCRResize:
             os.unlink(tmp)
 
     def test_resize_large_image(self):
-        from utils.ocr import _resize_for_ocr
+        import os
+        import tempfile
 
         from PIL import Image
-        import tempfile
-        import os
+
+        from utils.ocr import _resize_for_ocr
 
         img = Image.new("RGB", (3000, 3000), color="white")
         tmp = tempfile.mktemp(suffix=".png")
@@ -73,10 +74,10 @@ class TestOCRResize:
             os.unlink(tmp)
 
     def test_resize_invalid_image(self):
-        from utils.ocr import _resize_for_ocr
-
-        import tempfile
         import os
+        import tempfile
+
+        from utils.ocr import _resize_for_ocr
 
         with tempfile.NamedTemporaryFile(suffix=".txt", mode="w", delete=False) as f:
             f.write("not an image")

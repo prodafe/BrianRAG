@@ -183,8 +183,9 @@ _small_llm: BaseLLMProvider | None = None
 def get_llm_provider() -> BaseLLMProvider:
     global _llm_provider
     if _llm_provider is None:
-        from config import Config
         import os
+
+        from config import Config
 
         provider = getattr(Config, "LLM_PROVIDER", "ollama")
         model = Config.LLM_MODEL

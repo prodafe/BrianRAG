@@ -1,6 +1,5 @@
 """API 结构和模型测试"""
 
-import pytest
 
 
 class _MockLimiter:

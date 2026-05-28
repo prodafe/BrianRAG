@@ -123,7 +123,7 @@ def _ocr_paddle(image_path: str) -> str:
         if _PADDLE_35:
             texts = page.get("rec_texts", [])
             scores = page.get("rec_scores", [])
-            lines = [t for t, s in zip(texts, scores) if s > 0.5 and t.strip()]
+            lines = [t for t, s in zip(texts, scores, strict=False) if s > 0.5 and t.strip()]
         else:
             lines = []
             for line in page:

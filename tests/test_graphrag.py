@@ -1,6 +1,5 @@
 """GraphRAG 社区摘要测试"""
 
-import pytest
 
 
 class TestCommunityDetection:

@@ -30,7 +30,7 @@
 
 ## 执行
 
-可接受的行为事件可通过 [GitHub Issues](https://github.com/your-org/brianrag/issues) 向项目团队报告。项目团队将审查和调查所有投诉，并以认为适当的方式做出回应。
+可接受的行为事件可通过 [GitHub Issues](https://github.com/prodafe/BrianRAG/issues) 向项目团队报告。项目团队将审查和调查所有投诉，并以认为适当的方式做出回应。
 
 ## 归属
 

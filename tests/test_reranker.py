@@ -1,5 +1,15 @@
 """Reranker 模块测试"""
 
+import pytest
+
+try:
+    import torch  # noqa: F401
+
+    _TORCH_OK = True
+except ImportError:
+    _TORCH_OK = False
+
+pytestmark = pytest.mark.skipif(not _TORCH_OK, reason="torch not installed")
 
 
 class TestRerankerUnit:
@@ -68,14 +78,19 @@ class TestRerankerUnit:
 
 # ── Mock helpers ──
 
-import torch
+
+def _get_torch():
+    import torch
+
+    return torch
 
 
 class _MockTokenizer:
     def __call__(self, pairs, **kw):
+        t = _get_torch()
         n = len(pairs)
-        return {"input_ids": torch.zeros(n, 10, dtype=torch.long),
-                "attention_mask": torch.ones(n, 10, dtype=torch.long)}
+        return {"input_ids": t.zeros(n, 10, dtype=t.long),
+                "attention_mask": t.ones(n, 10, dtype=t.long)}
 
 
 def _mock_tokenizer():
@@ -85,14 +100,19 @@ def _mock_tokenizer():
 class _MockModel:
     def __init__(self, scores):
         self._scores = scores
+
     def to(self, d):
         return self
+
     def eval(self):
         return self
+
     def half(self):
         return self
+
     def __call__(self, **kw):
-        s = torch.tensor([[v] for v in self._scores])
+        t = _get_torch()
+        s = t.tensor([[v] for v in self._scores])
         return type("_", (), {"logits": s})()
 
 

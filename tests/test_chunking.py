@@ -1,6 +1,11 @@
 """父子分块 + Table-aware 切分测试"""
 
-from langchain_core.documents import Document
+import pytest
+
+try:
+    from langchain_core.documents import Document
+except ImportError:
+    Document = None
 
 
 class TestTableDetection:
@@ -42,6 +47,7 @@ class TestTableAwareSplit:
 
 
 class TestParentChildChunk:
+    @pytest.mark.skipif(Document is None, reason="langchain_core not installed")
     def test_generates_both_types(self):
         from core.chunking import parent_child_chunk
 
@@ -54,6 +60,7 @@ class TestParentChildChunk:
         assert all(c.metadata.get("chunk_type") == "child" for c in children)
         assert all(p.metadata.get("chunk_type") == "parent" for p in parents)
 
+    @pytest.mark.skipif(Document is None, reason="langchain_core not installed")
     def test_parent_larger_than_child(self):
         from core.chunking import parent_child_chunk
 

@@ -7,14 +7,15 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688)](https://fastapi.tiangolo.com/)
 [![Ollama](https://img.shields.io/badge/Ollama-native-000000)](https://ollama.com/)
 [![CI](https://github.com/prodafe/BrianRAG/actions/workflows/ci.yml/badge.svg)](https://github.com/prodafe/BrianRAG/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/tests-46%20passed-brightgreen)](https://github.com/prodafe/BrianRAG)
+[![Tests](https://img.shields.io/badge/tests-184%20passed-brightgreen)](https://github.com/prodafe/BrianRAG)
+[![Version](https://img.shields.io/badge/version-2.1.0-d4c098)](https://github.com/prodafe/BrianRAG/releases)
 [![Ruff](https://img.shields.io/badge/code%20style-ruff-000000)](https://github.com/astral-sh/ruff)
 
 <p align="center">
   <img src="frontend/Brian.png" alt="BrianRAG" width="180">
 </p>
 
-混合检索（BM25 + 向量 + 知识图谱 RRF）· PDF 版式分析 · OCR 扫描件 · 多模态理解 · ReAct Agent · 工具调用 · 自我修正 · 多租户 RBAC · 预训练缓存 · 全部本地运行。
+混合检索（BM25 + 向量 + 知识图谱 RRF）· GraphRAG 社区摘要 · 多 Agent 协作（Planner/Retriever/Critic）· 可视化工作流引擎 · Memory 系统 · 父子分块 · 20 数据源连接器 · PDF 表格提取 · VLM 图片理解 · 7 Agent 工具 · PWA 离线 · i18n 中英双语 · 独立管理后台 · RAGAS 自动化评估 · 全部本地运行。
 
 ---
 

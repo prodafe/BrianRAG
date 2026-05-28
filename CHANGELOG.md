@@ -1,5 +1,49 @@
 # Changelog
 
+## [2.1.0] — 2026-05-28
+
+### 修复 (Bug Fixes)
+- 修复 `@app.get()@limiter.limit()` 装饰器单行语法（第二个 `@` 被解析为矩阵乘法）
+- 修复 `_bg_executor` 未 shutdown（僵尸线程泄漏）
+- 修复 `core/prewarm.py` 裸 `except:` → 具体异常类型
+- 修复 `utils/document_loader.py` 无文件权限检查
+- 修复前端 `event` 全局变量 + 重复发送保护
+- 修复 `_table_aware_split` 表格重复切分 Bug
+
+### 新增 (Features)
+
+**Memory 系统** — 用户级记忆 Redis 持久化，跨会话上下文，LLM 自动信息提取
+
+**父子分块 + Table-aware** — Parent-Child Chunking，表格不切断
+
+**GraphRAG 社区摘要** — Leiden/Louvain 社区检测 + LLM 社区摘要生成
+
+**Agent 工作流引擎** — JSON 定义 DAG，4 节点类型（检索/生成/工具/条件），2 内置模板
+
+**多 Agent 协作** — Planner→Retriever→Critic 三角色编排 + 反思改进循环
+
+**Agent 工具扩展（4→7）** — 代码沙箱 + HTTP API 调用 + 文件读取
+
+**多 LLM Provider 自动检测** — 自动检测 `OPENAI_API_KEY`/`ANTHROPIC_API_KEY`
+
+**数据源连接器（1→20）** — Notion/S3/Confluence/GoogleDrive/WebDAV/RSS/Jira/Slack/Discord/GitLab/Dropbox/OneDrive/Asana/Trello/Airtable/钉钉/飞书/IMAP + TOC 提取
+
+**查询分解** — 复杂问题→子查询→并行检索→LLM 合并
+
+**PDF/文档增强** — PyMuPDF 原生表格提取→Markdown，VLM 图片 Caption
+
+**前端全面升级** — CSS/JS 模块化，60 键中英双语 i18n，独立管理后台（admin.html），PWA + Service Worker
+
+**RAGAS 自动化** — 一键评估 + 历史对比 + 检索延迟 P50/P95/P99 基准测试
+
+**文档站** — `docs/API.md`、`docs/GUIDE.md`、`docs/DEPLOY.md`
+
+**社区建设** — `.github/CODEOWNERS`、`FUNDING.yml`、`PULL_REQUEST_TEMPLATE.md`
+
+### 测试: 66 → 184 (+118 tests, 16 新测试模块)
+
+---
+
 ## [2.0.0] — 2026-05-26
 
 ### 架构升级

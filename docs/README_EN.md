@@ -1,7 +1,7 @@
 # BrianRAG — Enterprise Knowledge Engine
 
 [![CI](https://github.com/prodafe/BrianRAG/actions/workflows/ci.yml/badge.svg)](https://github.com/prodafe/BrianRAG/actions)
-[![Version](https://img.shields.io/badge/version-2.0.0-gold)](https://github.com/prodafe/BrianRAG/releases/tag/v2.0.0)
+[![Version](https://img.shields.io/badge/version-2.1.0-gold)](https://github.com/prodafe/BrianRAG/releases/tag/v2.1.0)
 [![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue)](https://www.python.org/)
 [![License](https://img.shields.io/badge/license-Apache%202.0-green)](LICENSE)
 

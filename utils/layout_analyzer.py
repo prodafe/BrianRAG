@@ -293,3 +293,98 @@ def pdf_has_text_layer(pdf_path: str) -> bool:
         return len(text.strip()) > 100
     except Exception:
         return False
+
+
+# ── 增强表格提取 ──
+
+
+def extract_tables_from_page(page: "fitz.Page") -> list[dict]:
+    """使用 PyMuPDF 原生表格检测提取页面中的表格。
+
+    Returns:
+        [{"rows": [[cell,...],...], "bbox": (x0,y0,x1,y1), "page": N}, ...]
+    """
+    try:
+        tabs = page.find_tables(strategy="lines")
+        results = []
+        for tab in tabs:
+            rows = []
+            for row in tab.extract():
+                rows.append([str(cell) if cell is not None else "" for cell in row])
+            if rows:
+                results.append({
+                    "rows": rows,
+                    "bbox": tuple(tab.bbox),
+                    "page": page.number,
+                })
+        return results
+    except Exception:
+        return []
+
+
+def tables_to_markdown(tables: list[dict]) -> str:
+    """将提取的表格转换为 Markdown 格式"""
+    parts = []
+    for tab in tables:
+        rows = tab.get("rows", [])
+        if not rows:
+            continue
+        # Header
+        parts.append("| " + " | ".join(rows[0]) + " |")
+        parts.append("|" + "|".join(["---"] * len(rows[0])) + "|")
+        # Data rows
+        for row in rows[1:]:
+            padded = row + [""] * (len(rows[0]) - len(row))
+            parts.append("| " + " | ".join(padded[:len(rows[0])]) + " |")
+        parts.append("")
+    return "\n".join(parts)
+
+
+# ── 图片 VLM Caption 生成 ──
+
+
+def generate_image_caption(image_path: str, llm=None) -> str:
+    """使用视觉语言模型（VLM）为图片生成描述。
+
+    优先使用 Ollama 视觉模型（如 qwen2.5vl），回退到 OCR 文字。
+    """
+    from config import Config
+
+    if llm is None:
+        from core.llm_provider import get_llm_provider
+        llm = get_llm_provider()
+
+    import base64
+
+    try:
+        with open(image_path, "rb") as f:
+            img_b64 = base64.b64encode(f.read()).decode()
+
+        import ollama
+        resp = ollama.chat(
+            model=Config.VISION_MODEL,
+            messages=[{
+                "role": "user",
+                "content": "请用一句话描述这张图片的内容。如果是图表，请描述数据趋势和关键信息。如果是照片或截图，请描述场景和主体。",
+                "images": [img_b64],
+            }],
+        )
+        caption = resp.get("message", {}).get("content", "").strip()
+        if caption:
+            return caption
+    except ImportError:
+        pass
+    except Exception as e:
+        logger.info(f"VLM caption failed, falling back to OCR: {e}")
+
+    # Fallback to OCR
+    try:
+        from utils.ocr import extract_text_from_image
+
+        ocr_text = extract_text_from_image(image_path)
+        if ocr_text:
+            return f"[OCR] {ocr_text[:200]}"
+    except Exception:
+        pass
+
+    return os.path.basename(image_path)

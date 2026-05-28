@@ -45,7 +45,7 @@ tags_metadata = [
     {"name": "GitHub Sync", "description": "GitHub 数据源同步"},
 ]
 
-app = FastAPI(title="BrianRAG API", version="2.0.0", openapi_tags=tags_metadata,
+app = FastAPI(title="BrianRAG API", version="2.1.0", openapi_tags=tags_metadata,
               description="Enterprise Knowledge Engine — 本地优先 RAG 知识库问答系统。支持混合检索、知识图谱、多模态。")
 
 # ── API Key 鉴权（可选，通过环境变量 BRIAN_API_KEY 启用）──
@@ -163,7 +163,7 @@ def start_scheduler_and_watcher():
 
 @app.on_event("shutdown")
 def shutdown_watcher():
-    global _watcher_observer, _scheduler
+    global _watcher_observer, _scheduler, _bg_executor
     if _scheduler:
         _scheduler.shutdown(wait=False)
         logger.info("调度器已停止")
@@ -171,6 +171,9 @@ def shutdown_watcher():
         _watcher_observer.stop()
         _watcher_observer.join()
         logger.info("目录监控已停止")
+    if _bg_executor:
+        _bg_executor.shutdown(wait=True)
+        logger.info("后台线程池已关闭")
     close_redis()
     logger.info("Redis 连接池已关闭")
 
@@ -343,7 +346,8 @@ _health_cache = {"ts": 0, "data": None}
 _health_cache_ttl = 5  # 缓存 5 秒，避免高负载下频繁建连
 
 
-@app.get("/api/health", tags=["Health & Status"], summary="服务健康检查")@limiter.limit("5/second")
+@app.get("/api/health", tags=["Health & Status"], summary="服务健康检查")
+@limiter.limit("5/second")
 async def health(request: Request):
     now = time.time()
     if now - _health_cache["ts"] < _health_cache_ttl and _health_cache["data"]:
@@ -374,6 +378,7 @@ async def health(request: Request):
         status["status"] = "degraded"
 
     # Ollama
+    ollama_models = {}
     try:
         import httpx
 
@@ -381,15 +386,65 @@ async def health(request: Request):
             resp = await client.get(f"{Config.OLLAMA_BASE_URL}/api/tags")
             if resp.status_code == 200:
                 status["services"]["ollama"] = "ok"
+                ollama_models = {m["name"]: True for m in resp.json().get("models", [])}
             else:
                 status["services"]["ollama"] = "unavailable"
     except Exception:
         status["services"]["ollama"] = "unavailable"
         status["status"] = "degraded"
 
+    # Model availability
+    status["models"] = {
+        "llm": Config.LLM_MODEL in ollama_models if ollama_models else "unknown",
+        "embedding": Config.EMBEDDING_MODEL in ollama_models if ollama_models else "unknown",
+        "vision": Config.VISION_MODEL in ollama_models if ollama_models else "unknown",
+        "reranker": "configured" if Config.ENABLE_RERANK else "disabled",
+        "multimodal": "configured" if Config.ENABLE_MULTIMODAL else "disabled",
+    }
+
     _health_cache["ts"] = now
     _health_cache["data"] = status
     return status
+
+
+@app.post("/api/index/images", tags=["Index & Documents"], summary="批量索引图片到多模态检索器")
+async def index_images(batch_size: int = 50):
+    """扫描 data/ 目录下的图片文件，批量嵌入 CLIP 索引"""
+    pipeline = get_pipeline()
+    retriever = pipeline.retriever
+    if not retriever or not retriever._init_success:
+        raise HTTPException(500, "检索器未初始化")
+    if not retriever.clip_retriever or not retriever.clip_retriever.is_available:
+        raise HTTPException(503, "多模态检索器不可用（CLIP 模型未加载）")
+
+    image_extensions = {".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp"}
+    all_images = []
+    for root, _dirs, files in os.walk(Config.DATA_DIR):
+        for f in files:
+            ext = os.path.splitext(f)[1].lower()
+            if ext in image_extensions:
+                all_images.append(os.path.join(root, f))
+
+    if not all_images:
+        return {"message": "没有找到图片文件", "indexed": 0}
+
+    indexed = 0
+    total = len(all_images)
+    for i in range(0, total, batch_size):
+        batch = all_images[i : i + batch_size]
+        for img_path in batch:
+            try:
+                from PIL import Image
+
+                Image.open(img_path).verify()
+                retriever.clip_retriever.add_image(img_path, {"source": img_path, "type": "image"})
+                indexed += 1
+            except Exception as e:
+                logger.warning(f"索引图片失败 {img_path}: {e}")
+        retriever.clip_retriever.save_index()
+        logger.info(f"图片索引进度: {min(i + batch_size, total)}/{total}")
+
+    return {"message": "图片索引完成", "indexed": indexed, "total": total}
 
 
 @app.post("/api/upload", tags=["Index & Documents"], summary="上传文档文件")
@@ -533,7 +588,8 @@ def get_pipeline():
     return _pipeline
 
 
-@app.post("/api/query", tags=["Query"], summary="知识库问答查询（支持 rag/agentic/graph/multimodal）")@limiter.limit("10/minute")
+@app.post("/api/query", tags=["Query"], summary="知识库问答查询（支持 rag/agentic/graph/multimodal）")
+@limiter.limit("10/minute")
 async def query(request: Request, req: QueryRequest):
     """同步查询接口"""
     pipeline = get_pipeline()
@@ -679,6 +735,64 @@ async def get_graph(node_limit: int = 200):
         return {"nodes": [], "edges": [], "stats": {"node_count": 0, "edge_count": 0}}
 
 
+@app.get("/api/graph/communities", tags=["Knowledge Graph"], summary="知识图谱社区检测与摘要（GraphRAG）")
+async def get_graph_communities(max_communities: int = 10):
+    """检测知识图谱社区并生成 LLM 摘要（GraphRAG 风格）"""
+    from core.retriever import _get_shared
+
+    gb = _get_shared("graph_builder")
+    if gb is None:
+        try:
+            from core.graph_builder import GraphBuilder
+            gb = GraphBuilder()
+            gb.load()
+        except Exception:
+            return {"communities": [], "stats": {"node_count": 0}}
+
+    communities = gb.detect_communities()
+    summaries = gb.summarize_communities(max_communities=max_communities)
+    stats = gb.get_stats()
+
+    return {
+        "communities": summaries,
+        "community_count": len(communities),
+        "stats": stats,
+    }
+
+
+# ── 工作流 + 多 Agent API ──
+
+
+@app.get("/api/workflow/templates", tags=["Query"], summary="获取内置工作流模板")
+async def list_workflow_templates():
+    from core.workflow_engine import BUILTIN_TEMPLATES
+    return {"templates": list(BUILTIN_TEMPLATES.values())}
+
+
+@app.post("/api/workflow/run", tags=["Query"], summary="执行工作流")
+async def run_workflow(req: dict):
+    from core.workflow_engine import Workflow, WorkflowEngine
+
+    workflow = Workflow.from_dict(req)
+    pipeline = get_pipeline()
+    engine = WorkflowEngine(pipeline=pipeline)
+    from core.tools import _registry
+    for name, info in _registry.items():
+        engine.register_tool(name, info["func"])
+
+    result = engine.run(workflow, {"question": req.get("input", {}).get("question", "")})
+    return {"workflow_id": workflow.id, "result": result["result"], "history": result["state"]["history"]}
+
+
+@app.post("/api/agent/multi", tags=["Query"], summary="多 Agent 协作查询（Planner+Retriever+Critic）")
+async def multi_agent_query(req: dict):
+    from core.multi_agent import run_multi_agent
+
+    pipeline = get_pipeline()
+    result = run_multi_agent(req.get("question", ""), pipeline=pipeline)
+    return result
+
+
 class PlaygroundRequest(BaseModel):
     question: str
     mode: str = "rag"
@@ -724,8 +838,8 @@ async def playground_query(req: PlaygroundRequest):
                 reranked = pipeline.reranker.rerank(req.question, candidate[0][:10], top_k=req.top_k or 5)
                 rerank_scores = [(text[:60], round(score, 3)) for score, _, text in reranked[:3]]
                 trace["timing_ms"]["rerank"] = round((time.perf_counter() - t0) * 1000, 1)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(f"Playground reranker failed: {e}")
         trace["steps"].append({"step": "rerank", "top_scores": rerank_scores})
 
         # Step 4: 生成

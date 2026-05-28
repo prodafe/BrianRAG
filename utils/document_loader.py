@@ -357,6 +357,12 @@ class UnifiedDocumentLoader:
 
 
 def load_single_document(file_path: str) -> list[Document]:
+    if not os.path.isfile(file_path):
+        logger.warning(f"文件不存在，跳过: {file_path}")
+        return []
+    if not os.access(file_path, os.R_OK):
+        logger.warning(f"文件无读权限，跳过: {file_path}")
+        return []
     ext = os.path.splitext(file_path)[1].lower()
 
     # PDF：优先用版式分析器（大文件直接用 PyMuPDF 避免超时）

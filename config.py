@@ -52,7 +52,7 @@ if BaseSettings is not object:
 
         # ── 重排序 ──
         enable_rerank: bool = True
-        rerank_model: str = os.path.join(_BASE_DIR, "models", "bge-reranker-v2-m3")
+        rerank_model: str = "BAAI/bge-reranker-v2-m3"
         rerank_use_fp16: bool = True
         rerank_top_k: int = 3
         rerank_candidate_multiplier: int = 2
@@ -170,7 +170,7 @@ if BaseSettings is not object:
 
         # ── 多模态 ──
         enable_multimodal: bool = True
-        multimodal_model_path: str = ""
+        multimodal_model_path: str = "sentence-transformers/clip-ViT-B-32-multilingual-v1"
         multimodal_device: str = "cuda"
         multimodal_similarity_threshold: float = 0.7
         multimodal_top_k: int = 3
@@ -227,7 +227,7 @@ else:
             self.enable_mmr = True
             self.mmr_lambda = 0.7
             self.enable_rerank = True
-            self.rerank_model = os.path.join(_BASE_DIR, "models", "bge-reranker-v2-m3")
+            self.rerank_model = "BAAI/bge-reranker-v2-m3"
             self.rerank_use_fp16 = True
             self.rerank_top_k = 3
             self.rerank_candidate_multiplier = 2

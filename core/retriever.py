@@ -86,16 +86,28 @@ class OllamaEmbeddings(Embeddings):
 
 class ClipRetriever:
     def __init__(self, model_path: str | None = None, index_path: str | None = None):
-        self.model_path = model_path or getattr(Config, "MULTIMODAL_MODEL_PATH", r"D:\models\clip-ViT-B-32")
+        self.model_path = model_path or _get_config("multimodal_model_path") or "sentence-transformers/clip-ViT-B-32-multilingual-v1"
         self.index_path = index_path or os.path.join(Config.INDEX_DIR, "clip_index.pkl")
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        self.model = CLIPModel.from_pretrained(self.model_path).to(self.device)
-        self.processor = CLIPProcessor.from_pretrained(self.model_path)
-        self.model.eval()
+        self.model = None
+        self.processor = None
+        self._loaded = False
         self.image_paths: list[str] = []
         self.image_metadatas: list[dict] = []
         self.image_embeddings: np.ndarray = np.empty((0, 512))
+        try:
+            self.model = CLIPModel.from_pretrained(self.model_path).to(self.device)
+            self.processor = CLIPProcessor.from_pretrained(self.model_path)
+            self.model.eval()
+            self._loaded = True
+            logger.info(f"CLIP 模型加载成功: {self.model_path}")
+        except Exception as e:
+            logger.warning(f"CLIP 模型加载失败 ({self.model_path}): {e}，多模态检索不可用")
         self.load_index()
+
+    @property
+    def is_available(self) -> bool:
+        return self._loaded
 
     def _to_abs_path(self, path: str) -> str:
         if os.path.isabs(path):
@@ -103,6 +115,8 @@ class ClipRetriever:
         return os.path.join(Config.DATA_DIR, path)
 
     def _encode_text(self, texts: list[str]) -> np.ndarray:
+        if not self._loaded:
+            return np.empty((0, 512))
         inputs = self.processor(text=texts, return_tensors="pt", padding=True, truncation=True).to(self.device)
         with torch.no_grad():
             embeddings = self.model.get_text_features(**inputs)
@@ -110,6 +124,8 @@ class ClipRetriever:
         return embeddings.cpu().numpy()
 
     def _encode_image(self, image_paths: list[str]) -> tuple[np.ndarray, list[int]]:
+        if not self._loaded:
+            return np.empty((0, 512)), []
         pil_images = []
         valid_indices = []
         for i, path in enumerate(image_paths):

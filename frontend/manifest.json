@@ -1,0 +1,16 @@
+{
+  "name": "BrianRAG — Enterprise Knowledge Engine",
+  "short_name": "BrianRAG",
+  "description": "本地优先 RAG 知识库问答系统 — 混合检索、知识图谱、多模态",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#06060C",
+  "theme_color": "#06060C",
+  "icons": [
+    {
+      "src": "Brian.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

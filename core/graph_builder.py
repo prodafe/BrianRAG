@@ -238,6 +238,153 @@ class GraphBuilder:
         sorted_indices = sorted(chunk_scores.items(), key=lambda x: x[1], reverse=True)[:top_k]
         return [idx for idx, _ in sorted_indices]
 
+    # ------ 增强检索 ------
+    def pagerank(self, alpha: float = 0.85) -> dict[str, float]:
+        """计算知识图谱实体重要性（PageRank），返回 {实体: 分数} 字典。"""
+        if len(self.graph.nodes()) == 0:
+            return {}
+        pr = nx.pagerank(self.graph, alpha=alpha)
+        return dict(sorted(pr.items(), key=lambda x: x[1], reverse=True))
+
+    def top_entities(self, n: int = 20) -> list[tuple[str, float]]:
+        """返回 PageRank 最高的 n 个实体。"""
+        pr = self.pagerank()
+        return list(pr.items())[:n]
+
+    def query_path(self, source: str, target: str, max_depth: int = 4) -> list[list[str]]:
+        """查找两个实体之间的所有路径（有向图按忽略方向处理）。"""
+        try:
+            ug = self.graph.to_undirected()
+            paths = list(nx.all_simple_paths(ug, source=source, target=target, cutoff=max_depth))
+            return paths[:20]
+        except (nx.NodeNotFound, nx.NetworkXNoPath):
+            return []
+
+    def subgraph_for_entity(self, entity: str, depth: int = 2) -> dict:
+        """提取以某实体为中心的子图，返回节点和边集合（用于 API JSON 输出）。"""
+        if entity not in self.graph:
+            return {"nodes": [], "edges": []}
+        nodes = {entity}
+        frontier = {entity}
+        for _ in range(depth):
+            new_frontier = set()
+            for n in frontier:
+                for neighbor in self.graph.neighbors(n):
+                    if neighbor not in nodes:
+                        nodes.add(neighbor)
+                        new_frontier.add(neighbor)
+            frontier = new_frontier
+            if not frontier:
+                break
+        edges = []
+        for u, v, data in self.graph.edges(data=True):
+            if u in nodes and v in nodes:
+                edges.append({"source": u, "target": v, "relation": data.get("relation", "")})
+        return {
+            "nodes": [{"id": n, "label": n, "degree": self.graph.degree(n)} for n in nodes],
+            "edges": edges,
+        }
+
+    def to_jsonld(self) -> dict:
+        """导出知识图谱为 JSON-LD 格式（用于知识图谱互操作）。"""
+        nodes = []
+        for n in self.graph.nodes():
+            nodes.append({"@id": f"_:{n}", "@type": "Entity", "name": n, "chunkCount": len(self.entity_to_chunks.get(n, set()))})
+        edges = []
+        for u, v, data in self.graph.edges(data=True):
+            edges.append({"@id": f"_:e_{u}_{v}", "@type": "Relationship",
+                          "subject": {"@id": f"_:{u}"}, "object": {"@id": f"_:{v}"},
+                          "predicate": data.get("relation", "")})
+        return {"@context": {"@vocab": "http://schema.org/", "Entity": "Thing", "Relationship": "Relationship"}, "@graph": nodes + edges}
+
+    # ------ GraphRAG 社区摘要 ------
+    def detect_communities(self, method: str = "louvain") -> list[set[str]]:
+        """检测知识图谱中的社区结构。
+
+        Args:
+            method: "louvain" (默认) 或 "label_propagation"
+        Returns:
+            社区列表，每个社区是一个实体集合
+        """
+        if self.graph.number_of_nodes() < 3:
+            return [set(self.graph.nodes())] if self.graph.nodes() else []
+
+        try:
+            if method == "louvain":
+                communities = nx.community.louvain_communities(self.graph.to_undirected(), seed=42)
+            elif method == "label_propagation":
+                communities = nx.community.label_propagation_communities(self.graph.to_undirected())
+            else:
+                communities = nx.community.louvain_communities(self.graph.to_undirected(), seed=42)
+
+            return [set(c) for c in sorted(communities, key=len, reverse=True) if len(c) >= 2]
+        except Exception as e:
+            logger.warning(f"社区检测失败: {e}")
+            return []
+
+    def summarize_communities(self, max_communities: int = 10, llm=None) -> list[dict]:
+        """为每个社区生成 LLM 摘要。
+
+        Returns:
+            [{"entities": [...], "summary": "...", "size": N, "key_relations": [...]}, ...]
+        """
+        communities = self.detect_communities()[:max_communities]
+        if not communities:
+            return []
+
+        if llm is None:
+            from core.llm_provider import get_small_llm
+            llm = get_small_llm()
+
+        results = []
+        for comm in communities:
+            entities = list(comm)[:20]
+            entity_list = ", ".join(entities)
+
+            # 提取社区内的关系
+            relations = []
+            for u, v, data in self.graph.edges(data=True):
+                if u in comm and v in comm:
+                    relations.append(f"{u} -[{data.get('relation', 'related')}]-> {v}")
+            relations_text = "\n".join(relations[:15])
+
+            if not relations_text:
+                continue
+
+            prompt = f"""以下是一个知识图谱社区中的实体和关系。请用1-2句话概括这个社区的主题和核心内容。不要输出其他内容。
+
+实体: {entity_list}
+
+关系:
+{relations_text}
+
+社区摘要:"""
+            try:
+                summary = llm.generate(prompt, options={"temperature": 0, "num_predict": 128})
+                results.append({
+                    "entities": entities,
+                    "summary": summary.strip(),
+                    "size": len(comm),
+                    "key_relations": relations[:10],
+                })
+            except Exception as e:
+                logger.warning(f"社区摘要生成失败: {e}")
+
+        return results
+
+    def get_stats(self) -> dict:
+        """返回图谱统计信息"""
+        communities = self.detect_communities()
+        return {
+            "nodes": self.graph.number_of_nodes(),
+            "edges": self.graph.number_of_edges(),
+            "entities": len(self.entity_to_chunks),
+            "density": nx.density(self.graph) if self.graph.number_of_nodes() > 1 else 0,
+            "top_entities": self.top_entities(10),
+            "communities": len(communities),
+            "largest_community": len(communities[0]) if communities else 0,
+        }
+
     # ------ 可视化 ------
     def to_html(self, output_path: str = "knowledge_graph.html"):
         from pyvis.network import Network

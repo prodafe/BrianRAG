@@ -184,15 +184,33 @@ def get_llm_provider() -> BaseLLMProvider:
     global _llm_provider
     if _llm_provider is None:
         from config import Config
+        import os
 
         provider = getattr(Config, "LLM_PROVIDER", "ollama")
         model = Config.LLM_MODEL
         base_url = getattr(Config, "OLLAMA_BASE_URL", "http://localhost:11434")
         api_key = getattr(Config, "LLM_API_KEY", "")
 
+        # Auto-detect from environment if not explicitly configured
+        if provider == "ollama":
+            if api_key := os.getenv("OPENAI_API_KEY", ""):
+                provider = "openai"
+                model = model or "gpt-4o-mini"
+                base_url = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
+                logger.info("Auto-detected OPENAI_API_KEY, switching to OpenAI provider")
+            elif api_key := os.getenv("ANTHROPIC_API_KEY", ""):
+                provider = "anthropic"
+                model = model or "claude-sonnet-4-6"
+                logger.info("Auto-detected ANTHROPIC_API_KEY, switching to Anthropic provider")
+
         if provider == "openai":
+            if not api_key:
+                api_key = os.getenv("OPENAI_API_KEY", "")
+                base_url = base_url or os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
             _llm_provider = OpenAIProvider(model=model, base_url=base_url, api_key=api_key)
         elif provider == "anthropic":
+            if not api_key:
+                api_key = os.getenv("ANTHROPIC_API_KEY", "")
             _llm_provider = AnthropicProvider(model=model, api_key=api_key)
         else:
             _llm_provider = OllamaLLMProvider(model=model, base_url=base_url)

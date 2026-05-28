@@ -171,5 +171,161 @@ def tool_unit(arg: str) -> str:
     return f"不支持 {from_unit} -> {to_unit} 的换算"
 
 
+# ── Web Search 工具 ──
+
+
+@register("search", "网络搜索，参数为搜索关键词。例如 `search:Python asyncio 用法`")
+def tool_search(query: str) -> str:
+    """使用 DuckDuckGo 匿名搜索，返回摘要。无需 API Key。"""
+    try:
+        from duckduckgo_search import DDGS
+
+        results = []
+        with DDGS() as ddgs:
+            for r in ddgs.text(query.strip(), max_results=5):
+                results.append(f"- {r['title']}: {r['body'][:200]}")
+        if results:
+            return "\n".join(results)
+        return "未找到相关搜索结果。"
+    except ImportError:
+        return "搜索功能不可用（缺少 duckduckgo_search 包）。pip install duckduckgo-search"
+    except Exception as e:
+        logger.warning(f"搜索失败: {e}")
+        return f"搜索出错: {e}"
+
+
+# ── 代码执行沙箱工具 ──
+
+
+@register("code", "安全执行 Python 代码并返回结果。参数为 Python 表达式或语句，例如 `code:3+5*2` 或 `code:sorted([3,1,2])`")
+def tool_code(code: str) -> str:
+    """受限的 Python 代码沙箱。仅允许安全的内置函数和白名单模块。"""
+    import ast as _ast
+    import math as _math
+    import json as _json
+
+    safe_builtins = {
+        "abs": abs, "all": all, "any": any, "bool": bool, "chr": chr,
+        "dict": dict, "divmod": divmod, "enumerate": enumerate, "filter": filter,
+        "float": float, "format": format, "frozenset": frozenset, "hash": hash,
+        "hex": hex, "int": int, "isinstance": isinstance, "issubclass": issubclass,
+        "iter": iter, "len": len, "list": list, "map": map, "max": max,
+        "min": min, "next": next, "oct": oct, "ord": ord, "pow": pow,
+        "range": range, "repr": repr, "reversed": reversed, "round": round,
+        "set": set, "slice": slice, "sorted": sorted, "str": str,
+        "sum": sum, "tuple": tuple, "type": type, "zip": zip,
+        "True": True, "False": False, "None": None,
+        "json": _json, "math": _math,
+        "datetime": __import__("datetime"),
+        "collections": __import__("collections"),
+        "itertools": __import__("itertools"),
+    }
+    safe_builtins["__builtins__"] = {k: safe_builtins[k] for k in ["abs", "all", "any", "bool",
+        "dict", "enumerate", "filter", "float", "int", "isinstance", "len", "list",
+        "map", "max", "min", "range", "repr", "round", "set", "sorted", "str",
+        "sum", "tuple", "type", "zip", "True", "False", "None"]}
+
+    try:
+        tree = _ast.parse(code.strip(), mode="exec")
+        # Basic safety: reject import statements, exec, eval, __
+        for node in _ast.walk(tree):
+            if isinstance(node, _ast.Import | _ast.ImportFrom) and not any(
+                alias.name in ("datetime", "collections", "itertools", "math", "json")
+                for alias in (node.names if isinstance(node, _ast.Import) else [node])
+            ):
+                return "代码执行被拒绝：不允许导入外部模块"
+            if isinstance(node, _ast.Call) and isinstance(node.func, _ast.Name) and node.func.id in ("exec", "eval", "compile", "__import__"):
+                return "代码执行被拒绝：不允许调用危险函数"
+
+        # Try eval() first for simple expressions (captures return value)
+        try:
+            expr_tree = _ast.parse(code.strip(), mode="eval")
+            result = eval(compile(expr_tree, "<sandbox>", "eval"), safe_builtins)
+            return str(result)
+        except SyntaxError:
+            pass  # Not an expression, fall through to exec
+
+        local_ns = {}
+        exec(compile(tree, "<sandbox>", "exec"), safe_builtins, local_ns)
+        # Return the last assigned value
+        for k in reversed(list(local_ns.keys())):
+            if not k.startswith("_"):
+                return str(local_ns[k])
+        return "执行成功（无返回值）"
+    except Exception as e:
+        return f"代码执行错误: {e}"
+
+
+@register("api", "调用外部 HTTP API。参数格式为 `GET|https://api.example.com` 或 `POST|url|body`")
+def tool_api(arg: str) -> str:
+    """调用 HTTP API 获取实时数据"""
+    try:
+        import urllib.request
+        import urllib.error
+        import json as _json
+
+        parts = arg.strip().split("|", 2)
+        method = parts[0].upper() if parts else "GET"
+        url = parts[1] if len(parts) > 1 else ""
+        body = parts[2] if len(parts) > 2 else None
+
+        if not url:
+            return "API 调用错误: 缺少 URL"
+
+        if not url.startswith(("http://", "https://")):
+            return "API 调用错误: 仅支持 HTTP/HTTPS"
+
+        req = urllib.request.Request(url, method=method)
+        req.add_header("User-Agent", "BrianRAG/2.1")
+        req.add_header("Accept", "application/json")
+
+        if body and method in ("POST", "PUT", "PATCH"):
+            req.add_header("Content-Type", "application/json")
+            req.data = body.encode()
+
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = resp.read().decode()
+            # 截断过长响应
+            if len(data) > 4000:
+                try:
+                    obj = _json.loads(data)
+                    return _json.dumps(obj, indent=2, ensure_ascii=False)[:4000]
+                except Exception:
+                    return data[:4000] + "...(truncated)"
+            return data
+    except urllib.error.HTTPError as e:
+        return f"API 错误: HTTP {e.code}"
+    except Exception as e:
+        return f"API 调用失败: {e}"
+
+
+@register("file_read", "读取已索引文档的内容。参数为文件名或路径片段")
+def tool_file_read(path: str) -> str:
+    """安全读取 data/ 目录下的文件"""
+    import os
+    from config import Config
+
+    clean = os.path.basename(path.strip())
+    target = os.path.join(Config.DATA_DIR, clean)
+    if not os.path.isfile(target):
+        # 尝试递归搜索
+        for root, _dirs, files in os.walk(Config.DATA_DIR):
+            for f in files:
+                if f == clean or clean in f:
+                    target = os.path.join(root, f)
+                    break
+    if not os.path.isfile(target):
+        return f"文件未找到: {clean}"
+
+    try:
+        with open(target, encoding="utf-8", errors="replace") as fh:
+            content = fh.read()
+        if len(content) > 5000:
+            content = content[:5000] + f"\n...(共 {len(content)} 字符，已截断)"
+        return content
+    except Exception as e:
+        return f"文件读取错误: {e}"
+
+
 # ── 初始化 ──
 logger.info(f"工具模块已加载: {list(_registry.keys())}")

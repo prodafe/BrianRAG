@@ -32,7 +32,12 @@ def ensure_components():
             retriever.is_loaded = True
             logger.info("图谱工作流检索器已从已有索引加载")
     if Config.ENABLE_RERANK and reranker is None:
-        reranker = Reranker(model_name=Config.RERANK_MODEL, use_fp16=Config.RERANK_USE_FP16)
+        try:
+            reranker = Reranker(model_name=Config.RERANK_MODEL, use_fp16=Config.RERANK_USE_FP16)
+            if not reranker.is_available:
+                reranker = None
+        except Exception:
+            reranker = None
     if generator is None:
         generator = Generator()
     if Config.ENABLE_GRAPH and graph_builder is None:

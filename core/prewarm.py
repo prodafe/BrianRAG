@@ -247,7 +247,7 @@ class PrewarmEngine:
                 c = self.redis.get(f"{PREWARM_KEY}:count")
                 if c:
                     count = max(count, int(c))
-            except:
+            except (ValueError, TypeError, ConnectionError, OSError):
                 pass
         return {"cached_qa_pairs": count, "target_count": self.target_count, "redis_available": self._redis_available}
 

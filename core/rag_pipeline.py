@@ -192,9 +192,11 @@ class RAGPipeline:
         if self._reranker is None and Config.ENABLE_RERANK:
             try:
                 self._reranker = Reranker(model_name=Config.RERANK_MODEL, use_fp16=Config.RERANK_USE_FP16)
-                logger.info("重排序模型延迟加载成功")
             except Exception as e:
                 logger.error(f"重排序模型加载失败: {e}")
+                self._reranker = None
+        if self._reranker is not None and not self._reranker.is_available:
+            self._reranker = None
         return self._reranker
 
     @property
@@ -644,6 +646,16 @@ class RAGPipeline:
                 }
         except Exception as e:
             logger.debug(f"预训练缓存检查跳过: {e}")
+
+        # ── Memory 系统: 加载用户记忆上下文 ──
+        memory_context = ""
+        try:
+            from core.memory import get_user_memory
+            user_id = history[0].get("user_id", "default") if history else "default"
+            memory = get_user_memory(user_id)
+            memory_context = memory.relevant_context(question, max_items=8)
+        except Exception:
+            pass
 
         if self.retriever is None:
             return self._empty_result(question, error="检索器未初始化")

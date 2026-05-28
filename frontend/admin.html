@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>BrianRAG Admin Console</title>
+<style>
+:root{--bg:#0a0a14;--fg:#e0e0e0;--ac:#d4c098;--card:#12122a;--btn:#1a1a3a;--hover:#222250;--border:#1f1f3a;--red:#d55;--green:#6a6;--yellow:#ca8;--muted:#666}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--fg);font-family:'Inter',system-ui,sans-serif;display:flex;min-height:100vh}
+nav{width:220px;min-width:220px;background:#0d0d20;border-right:1px solid var(--border);padding:20px 0;display:flex;flex-direction:column}
+nav .logo{padding:0 20px 20px;font-size:18px;font-weight:600;color:var(--ac);letter-spacing:-.02em;border-bottom:1px solid var(--border)}
+nav a{display:block;padding:10px 20px;color:var(--muted);text-decoration:none;font-size:12px;font-weight:400;transition:.15s;border-left:2px solid transparent;cursor:pointer}
+nav a:hover,nav a.active{color:var(--ac);background:rgba(212,192,152,.04);border-left-color:var(--ac)}
+main{flex:1;padding:32px;overflow-y:auto;min-width:0}
+h2{font-weight:300;font-size:22px;margin-bottom:24px;letter-spacing:-.01em}
+h3{font-weight:400;font-size:14px;color:var(--muted);margin-bottom:12px;text-transform:uppercase;letter-spacing:.05em}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:16px;margin-bottom:32px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:20px}
+.card .c-title{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px}
+.card .c-value{font-size:28px;font-weight:200}.card .c-sub{font-size:11px;color:var(--muted);margin-top:4px}
+.card.ok{border-left:2px solid var(--green)}.card.warn{border-left:2px solid var(--yellow)}.card.err{border-left:2px solid var(--red)}
+.bar{height:4px;background:var(--border);border-radius:2px;margin-top:8px;overflow:hidden}
+.bar-fill{height:100%;background:var(--ac);border-radius:2px;transition:width .6s}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th,td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--border)}
+th{color:var(--muted);font-weight:500;font-size:10px;text-transform:uppercase;letter-spacing:.05em}
+tr:hover{background:rgba(212,192,152,.03)}
+.btn{padding:8px 16px;background:var(--btn);border:1px solid var(--border);color:var(--fg);font-size:11px;font-family:inherit;border-radius:6px;cursor:pointer;transition:.15s}.btn:hover{background:var(--hover);border-color:var(--ac)}.btn.danger{color:var(--red)}.btn.accent{background:var(--ac);color:#000;border:none}
+.row{display:flex;gap:12px;align-items:center;margin-bottom:12px}
+input,select{background:var(--card);border:1px solid var(--border);color:var(--fg);padding:8px 12px;font-size:12px;font-family:inherit;border-radius:6px;outline:none}input:focus,select:focus{border-color:var(--ac)}
+.section{margin-bottom:32px}.badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:10px}.badge.ok{background:rgba(102,170,102,.15);color:var(--green)}.badge.err{background:rgba(221,85,85,.15);color:var(--red)}.badge.warn{background:rgba(204,170,136,.15);color:var(--yellow)}
+#loading{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;z-index:999;font-size:14px;color:var(--ac)}
+</style>
+</head>
+<body>
+<div id="loading">Initializing BrianRAG Admin...</div>
+<nav>
+  <div class="logo">BrianRAG Admin</div>
+  <a class="active" onclick="showPanel('overview')">Overview</a>
+  <a onclick="showPanel('documents')">Documents</a>
+  <a onclick="showPanel('indexing')">Indexing</a>
+  <a onclick="showPanel('datasources')">Data Sources</a>
+  <a onclick="showPanel('graph')">Knowledge Graph</a>
+  <a onclick="showPanel('sessions')">Sessions</a>
+  <a onclick="showPanel('logs')">Logs</a>
+  <a onclick="showPanel('settings')">Settings</a>
+  <a href="/" style="margin-top:auto">← Back to App</a>
+</nav>
+<main id="main-content"></main>
+<script>
+const $=s=>document.querySelector(s),$$=s=>document.querySelectorAll(s);
+const API='';
+let _state={health:{},docs:[],prewarm:{},graph:{}};
+
+async function init(){
+  try{
+    const[h,d,p,g]=await Promise.all([
+      fetch(API+'/api/health').then(r=>r.json()),
+      fetch(API+'/api/documents').then(r=>r.json()),
+      fetch(API+'/api/prewarm/status').then(r=>r.json()).catch(()=>({})),
+      fetch(API+'/api/graph?node_limit=0').then(r=>r.json()).catch(()=>({}))
+    ]);
+    _state={health:h, docs:d.documents||[], prewarm:p, graph:g.stats||{}};
+    $('#loading').style.display='none';
+    showPanel('overview');
+  }catch(e){$('#loading').textContent='Cannot connect to BrianRAG API at '+location.origin}
+}
+
+function showPanel(name){
+  $$('nav a').forEach(a=>a.classList.remove('active'));
+  $$(`nav a[onclick="showPanel('${name}')"]`).forEach(a=>a.classList.add('active'));
+  const m=$('#main-content');
+  if(name==='overview')m.innerHTML=renderOverview();
+  if(name==='documents')m.innerHTML=renderDocuments();
+  if(name==='indexing')m.innerHTML=renderIndexing();
+  if(name==='datasources')m.innerHTML=renderDataSources();
+  if(name==='graph')m.innerHTML=renderGraph();
+  if(name==='sessions')m.innerHTML=renderSessions();
+  if(name==='logs')loadLogs(m);
+  if(name==='settings')m.innerHTML=renderSettings();
+}
+
+function renderOverview(){
+  const s=_state.health.services||{},m=_state.health.models||{};
+  let cards='';
+  for(const[k,v]of Object.entries(s)){
+    const cls=v==='ok'?'ok':(v==='unavailable'?'err':'warn');
+    cards+=`<div class="card ${cls}"><div class="c-title">${k}</div><div class="c-value">${v}</div></div>`;
+  }
+  const dc=_state.docs.length,imgs=_state.docs.filter(d=>d.path&&d.path.match(/\.(png|jpg)$/i)).length;
+  cards+=`<div class="card ok"><div class="c-title">Documents</div><div class="c-value">${dc}</div><div class="c-sub">${imgs} images</div></div>`;
+  cards+=`<div class="card ok"><div class="c-title">Prewarm Cache</div><div class="c-value">${_state.prewarm.cached_qa_pairs||0}</div><div class="c-sub">/ ${_state.prewarm.target_count||150}</div></div>`;
+  const gs=_state.graph;
+  cards+=`<div class="card ok"><div class="c-title">Knowledge Graph</div><div class="c-value">${gs.nodes||0}</div><div class="c-sub">${gs.edges||0} edges · ${gs.communities||0} communities</div></div>`;
+
+  return `<h2>System Overview</h2><div class="grid">${cards}</div>
+    <div class="section"><h3>Model Status</h3><div class="grid">${Object.entries(m).map(([k,v])=>`<div class="card"><div class="c-title">${k}</div><div class="c-value" style="font-size:16px">${v}</div></div>`).join('')}</div></div>
+    <div class="section"><h3>Quick Actions</h3><button class="btn accent" onclick="refreshAll()">Refresh All</button>
+    <button class="btn" onclick="location.href='/'">Open Chat App</button></div>`;
+}
+
+function renderDocuments(){
+  const rows=_state.docs.length?_state.docs.map(d=>`<tr><td>${esc(d.path||'')}</td><td style="font-size:10px;color:var(--muted)">${d.hash||''.slice(0,8)}</td><td><button class="btn danger" onclick="deleteDoc('${d.hash}')">Delete</button></td></tr>`).join(''):'<tr><td colspan="3" style="color:var(--muted);text-align:center">No documents indexed</td></tr>';
+  return `<h2>Documents</h2>
+    <div class="row"><input type="file" id="fileInput" multiple accept=".pdf,.md,.txt,.docx,.png,.jpg,.jpeg,.zip,.html,.csv,.pptx,.xlsx"><button class="btn accent" onclick="uploadFiles()">Upload & Index</button></div>
+    <table><thead><tr><th>Path</th><th>Hash</th><th>Actions</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+function renderIndexing(){
+  return `<h2>Index Management</h2>
+    <div class="card" style="margin-bottom:16px"><div class="c-title">Rebuild Index</div><p style="font-size:12px;color:var(--muted);margin:8px 0">Clear existing index and rebuild from all documents in data/ directory.</p><button class="btn danger" onclick="rebuildIndex()">Rebuild Full Index</button></div>
+    <div class="card"><div class="c-title">Batch Index Images</div><p style="font-size:12px;color:var(--muted);margin:8px 0">Index all images into the multimodal CLIP index.</p><button class="btn" onclick="indexImages()">Index Images</button></div>`;
+}
+
+function renderDataSources(){
+  const srcs=[{name:'GitHub',key:'github',env:'BRIAN_GITHUB_REPO_URL'},{name:'Notion',key:'notion',env:'NOTION_API_KEY'},{name:'S3/MinIO',key:'s3',env:'S3_ENDPOINT'},{name:'Confluence',key:'confluence',env:'CONFLUENCE_URL'},{name:'Google Drive',key:'gdrive',env:'GOOGLE_APPLICATION_CREDENTIALS'},{name:'WebDAV',key:'webdav',env:'WEBDAV_URL'},{name:'RSS',key:'rss',env:''},{name:'Jira',key:'jira',env:'JIRA_URL'},{name:'Slack',key:'slack',env:'SLACK_TOKEN'},{name:'Discord',key:'discord',env:'DISCORD_TOKEN'},{name:'GitLab',key:'gitlab',env:'GITLAB_URL'},{name:'Dropbox',key:'dropbox',env:'DROPBOX_TOKEN'},{name:'OneDrive',key:'onedrive',env:'ONEDRIVE_TOKEN'},{name:'Asana',key:'asana',env:'ASANA_TOKEN'},{name:'Trello',key:'trello',env:'TRELLO_KEY'},{name:'Airtable',key:'airtable',env:'AIRTABLE_TOKEN'},{name:'DingTalk',key:'dingtalk',env:'DINGTALK_TOKEN'},{name:'Feishu',key:'feishu',env:'FEISHU_TOKEN'},{name:'IMAP',key:'imap',env:'IMAP_SERVER'},{name:'Webhook',key:'webhook',env:'WEBHOOK_URL'}];
+  const rows=srcs.map(s=>`<tr><td>${s.name}</td><td style="font-size:10px;color:var(--muted)">${s.env||'manual'}</td><td><span class="badge warn">manual config</span></td></tr>`).join('');
+  return `<h2>Data Sources</h2><p style="font-size:12px;color:var(--muted);margin-bottom:16px">Configure via environment variables or .env file. See docs/DEPLOY.md for details.</p>
+    <table><thead><tr><th>Source</th><th>Config</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+function renderGraph(){
+  const g=_state.graph;
+  return `<h2>Knowledge Graph</h2><div class="grid">
+    <div class="card ok"><div class="c-title">Nodes</div><div class="c-value">${g.nodes||0}</div></div>
+    <div class="card ok"><div class="c-title">Edges</div><div class="c-value">${g.edges||0}</div></div>
+    <div class="card ok"><div class="c-title">Communities</div><div class="c-value">${g.communities||0}</div></div>
+    <div class="card ok"><div class="c-title">Density</div><div class="c-value">${(g.density||0).toFixed(4)}</div></div>
+  </div>
+  <div class="section"><h3>Community Summaries</h3><button class="btn" onclick="loadCommunities()">Load GraphRAG Summaries</button><div id="comm-results" style="margin-top:12px;font-size:12px"></div></div>`;
+}
+
+function renderSessions(){return `<h2>Sessions</h2><div class="card"><p style="font-size:12px;color:var(--muted)">Session data stored in Redis. Use the API directly for session management.</p><br><button class="btn" onclick="fetch(API+'/api/prewarm/status').then(r=>r.json()).then(d=>alert(JSON.stringify(d,null,2)))">Test API</button></div>`;}
+
+async function loadLogs(el){el.innerHTML=`<h2>Logs</h2><div class="card"><p style="font-size:12px;color:var(--muted)">Recent log entries from logs/brianrag.log</p><pre id="log-view" style="margin-top:8px;font-size:10px;color:var(--muted);max-height:400px;overflow-y:auto;background:var(--bg);padding:12px;border-radius:6px">Loading...</pre></div>`;try{const r=await fetch(API+'/api/logs/recent?lines=50');const t=await r.text();$('#log-view').textContent=t||'No logs available';}catch(e){$('#log-view').textContent='Log endpoint not available';}}
+
+function renderSettings(){
+  return `<h2>Settings</h2><div class="card"><div class="c-title">Current Configuration</div><pre style="margin-top:8px;font-size:10px;color:var(--muted);max-height:400px;overflow-y:auto;background:var(--bg);padding:12px;border-radius:6px" id="settings-preview">Loading...</pre></div>`;
+  setTimeout(async()=>{try{const r=await fetch(API+'/api/config/preview');$('#settings-preview').textContent=await r.text();}catch(e){$('#settings-preview').textContent='Config preview not available. Check config.py directly.';}},100);
+}
+
+async function uploadFiles(){
+  const files=$('#fileInput')?.files;if(!files||!files.length)return alert('Select files first');
+  const fd=new FormData();for(const f of files)fd.append('files',f);
+  const r=await fetch(API+'/api/upload',{method:'POST',body:fd});const d=await r.json();
+  if(d.file_paths?.length){await fetch(API+'/api/index',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({file_paths:d.file_paths,incremental:!0})})}
+  refreshAll();alert(`Uploaded ${files.length} file(s)`);
+}
+async function deleteDoc(hash){if(!confirm('Delete this document?'))return;await fetch(API+'/api/documents/'+hash,{method:'DELETE'});refreshAll();}
+async function rebuildIndex(){if(!confirm('This will clear ALL indexed data. Continue?'))return;await fetch(API+'/api/index',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({file_paths:[],incremental:false})});refreshAll();alert('Index rebuild started');}
+async function indexImages(){try{const r=await fetch(API+'/api/index/images',{method:'POST'});const d=await r.json();alert(d.message);}catch(e){alert('Failed: '+e);}}
+async function loadCommunities(){try{const r=await fetch(API+'/api/graph/communities');const d=await r.json();$('#comm-results').innerHTML=(d.communities||[]).map(c=>`<div class="card" style="margin-bottom:8px"><b>${c.summary||''}</b><br><span style="font-size:10px;color:var(--muted)">${c.size||0} entities: ${(c.entities||[]).slice(0,5).join(', ')}</span></div>`).join('')||'No communities found';}catch(e){$('#comm-results').textContent='Failed to load';}}
+async function refreshAll(){$('#loading').style.display='flex';await init();$('#loading').style.display='none';showPanel('overview');}
+function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML}
+init();
+</script>
+</body>
+</html>

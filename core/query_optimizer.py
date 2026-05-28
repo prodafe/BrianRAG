@@ -152,3 +152,55 @@ JSON："""
             return [question] + queries if queries else [question]
         except Exception:
             return [question]
+
+    def answer_with_decomposition(self, question: str, pipeline) -> dict:
+        """查询分解 + 逐个子问题检索 + 合并答案。
+
+        对于复杂问题，分解后分别检索，最后 LLM 综合所有子答案。
+        """
+        sub_queries = self.decompose_query(question)
+        if len(sub_queries) <= 1:
+            return pipeline.query(question)
+
+        # 并行检索子问题
+        sub_results = []
+        for sq in sub_queries:
+            try:
+                r = pipeline.query(sq, history=None)
+                sub_results.append({"question": sq, "answer": r.get("answer", ""), "chunks": r.get("used_chunks", [])})
+            except Exception:
+                sub_results.append({"question": sq, "answer": "", "chunks": []})
+
+        # 合并所有子答案
+        sub_answers = "\n\n".join(
+            f"Q: {r['question']}\nA: {r['answer']}" for r in sub_results if r["answer"]
+        )
+        all_chunks = []
+        for r in sub_results:
+            all_chunks.extend(r.get("chunks", []))
+
+        merge_prompt = f"""基于以下子问题的回答，综合给出一个完整、连贯的回答。不要重复子问题的结构，而是自然整合信息。
+
+原始问题：{question}
+
+子问题及回答：
+{sub_answers}
+
+综合回答："""
+        try:
+            merged = self._llm.generate(merge_prompt, options={"temperature": 0.1})
+            return {
+                "question": question,
+                "answer": merged.strip(),
+                "used_chunks": all_chunks,
+                "sub_queries": sub_queries,
+                "sub_results": [{"question": r["question"], "answer": r["answer"][:200]} for r in sub_results],
+            }
+        except Exception:
+            # Fallback: return concatenated sub-answers
+            return {
+                "question": question,
+                "answer": sub_answers,
+                "used_chunks": all_chunks,
+                "sub_queries": sub_queries,
+            }

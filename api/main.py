@@ -91,7 +91,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     logger.info("Redis 连接池已关闭")
 
 
-app = FastAPI(title="BrianRAG API", version="2.2.1", lifespan=lifespan, openapi_tags=tags_metadata,
+app = FastAPI(title="BrianRAG API", version="2.2.2", lifespan=lifespan, openapi_tags=tags_metadata,
               description="Enterprise Knowledge Engine — 本地优先 RAG 知识库问答系统。支持混合检索、知识图谱、多模态。")
 
 # ── API Key 鉴权（可选，通过环境变量 BRIAN_API_KEY 启用）──

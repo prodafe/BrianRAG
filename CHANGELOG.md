@@ -1,5 +1,34 @@
 # Changelog
 
+## [2.2.2] — 2026-05-29
+
+### 修复 (Bug Fixes)
+
+**API 版本号修正** — `api/main.py` 中 FastAPI version 漏更新，现统一为 2.2.2
+
+### 工程完善
+
+**Lint 零警告** — 11 处风格问题全部修复
+- 6 处 `contextlib.suppress` 替代 `try/except: pass`
+- 3 处 ternary / `any()` 简化
+- 2 处嵌套 `with` 合并 / 嵌套 `if` 合并
+
+**文档全面同步** — 12 个 MD 文件统一更新
+- `readme.md` / `CHANGELOG.md` / `SECURITY.md` / `SKILLS.md` 版本号
+- `docs/README_EN.md` 版本徽章 + 引用
+- `docs/GUIDE.md` 7→12 工具完整文档
+- `skills/brianrag-bench/SKILL.md` 评分更新 (文档95/Agent90/前端90)
+- `skills/brianrag-audit/SKILL.md` 新增 XSS/innerHTML 审计项
+- `skills/brianrag-dev/SKILL.md` 新增 agent_loop/deep_doc_parser 模块
+- `skills/README.md` v1.1 changelog
+
+**Type Hints** — `core/redis_client.py` 添加 TYPE_CHECKING 修复 F821
+
+### 测试
+- 172 tests passed, 0 lint errors
+
+---
+
 ## [2.2.1] — 2026-05-29
 
 ### 修复 (Bug Fixes)

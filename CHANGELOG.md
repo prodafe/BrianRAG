@@ -1,5 +1,29 @@
 # Changelog
 
+## [2.2.1] — 2026-05-29
+
+### 修复 (Bug Fixes)
+
+**安全加固**
+- XSS 修复: `d.hash` 注入 onclick → `esc()` + 单引号转义 (`app.js`)
+- XSS 修复: 健康检查服务名未转义 → `esc()` 包裹 (`app.js`)
+
+**代码质量**
+- 4 处静默 `except Exception: pass` → `logger.debug/warning` 记录
+- `agent_loop.py`: retriever fallback + `_force_finalize` 异常日志
+- `deep_doc_parser.py`: CSV fallback + email HTML parse 异常日志
+- `tools.py`: JSON format fallback 异常日志
+
+**工程优化**
+- `@app.on_event("startup/shutdown")` → `lifespan` context manager (FastAPI 推荐)
+- `_history` 数组上限 12→50 条，防止长会话内存泄漏
+- `chkP()` / `chkG()` 静默 `catch(e){}` → `console.debug()` 日志
+
+### 测试
+- 172 tests passed, 0 lint errors
+
+---
+
 ## [2.2.0] — 2026-05-29
 
 ### 新增 (Features)

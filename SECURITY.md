@@ -69,5 +69,7 @@ BrianRAG 设计为本地/内网运行。如果暴露到公网：
 发现并修复的漏洞将在 [CHANGELOG.md](CHANGELOG.md) 中记录。
 
 已知已修复的安全问题：
+- v2.2.1: XSS 修复（文档列表+健康检查innerHTML转义）、静默异常→logger、FastAPI lifespan迁移
+- v2.2.0: 深度文档解析引擎、ReAct Agent循环、12工具、暗黑模式
 - v2.1.0: 线程池泄漏（僵尸线程）、裸 except 静默吞异常、路径穿越风险、装饰器语法错误
 - v2.0.0: Zip Slip 防护、AST 安全求值器替代 eval()、统一 Redis 连接池双检锁、psycopg 连接 context manager

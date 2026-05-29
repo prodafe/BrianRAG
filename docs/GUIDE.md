@@ -31,14 +31,27 @@ PDF, Markdown, DOCX, HTML, CSV, PPTX, XLSX, TXT, XML, RTF, ODT, EPUB, Python, JS
 
 ## Agent Tools
 
-BrianRAG supports 7 built-in tools:
+BrianRAG supports 12 built-in tools:
+
+**Core Tools**
 - **calc**: Math calculations (`calc:sqrt(16)*3`)
 - **time**: Date/time queries (`time:now`, `time:+3天`)
 - **unit**: Unit conversion (`unit:10km->m`)
-- **search**: Web search (`search:Python 3.12 release notes`)
+
+**Search & Web**
+- **search**: Web search via DuckDuckGo (`search:Python async patterns`)
+- **wiki**: Wikipedia lookup (`wiki:quantum computing`)
+- **scrape**: Web page text extraction (`scrape:https://example.com`)
+
+**Data & Code**
 - **code**: Safe Python sandbox (`code:sorted([3,1,2])`)
+- **sql**: PostgreSQL read-only query (`sql:SELECT count(*) FROM chunks`)
 - **api**: HTTP API calls (`api:GET|https://api.example.com`)
 - **file_read**: Read indexed documents (`file_read:config.md`)
+- **json**: JSON format/field extraction
+
+**Language**
+- **translate**: Chinese↔English translation (`translate:en:Hello world`)
 
 ## Knowledge Graph
 

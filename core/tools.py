@@ -28,7 +28,7 @@ _SAFE_FUNCS = {
 def _safe_eval_node(node):
     """递归求值 AST 节点，只允许安全的数学操作。"""
     if isinstance(node, ast.Constant):
-        if isinstance(node.value, (int, float)):
+        if isinstance(node.value, int | float):
             return node.value
         raise ValueError(f"不支持的常量: {node.value}")
     elif isinstance(node, ast.BinOp):
@@ -53,7 +53,7 @@ def _safe_eval_node(node):
         func = _SAFE_FUNCS.get(node.id)
         if func is not None:
             val = func()
-            if isinstance(val, (int, float)):
+            if isinstance(val, int | float):
                 return val
         raise ValueError(f"不支持的变量: {node.id}")
     raise ValueError(f"不支持的表达式节点: {type(node).__name__}")
@@ -326,6 +326,199 @@ def tool_file_read(path: str) -> str:
         return content
     except Exception as e:
         return f"文件读取错误: {e}"
+
+
+# ── Wikipedia 搜索工具 ──
+
+
+@register("wiki", "Wikipedia 百科搜索。参数为搜索关键词。例如 `wiki:量子计算`")
+def tool_wiki(query: str) -> str:
+    """搜索 Wikipedia 中英文，返回摘要。"""
+    try:
+        import json as _json
+        import urllib.error
+        import urllib.parse
+        import urllib.request
+
+        # 先搜中文
+        for lang, lang_name in [("zh", "中文"), ("en", "英文")]:
+            url = f"https://{lang}.wikipedia.org/api/rest_v1/page/summary/{urllib.parse.quote(query.strip())}"
+            req = urllib.request.Request(url, headers={"User-Agent": "BrianRAG/2.1", "Accept": "application/json"})
+            try:
+                with urllib.request.urlopen(req, timeout=8) as resp:
+                    data = _json.loads(resp.read().decode())
+                    if data.get("extract"):
+                        summary = data["extract"][:1000]
+                        return f"[{lang_name} Wikipedia]\n{summary}"
+            except urllib.error.HTTPError as e:
+                if e.code != 404:
+                    logger.debug(f"Wikipedia {lang} fallback: HTTP {e.code}")
+                continue
+            except Exception:
+                continue
+        return "未在 Wikipedia 找到相关内容。"
+    except Exception as e:
+        return f"Wikipedia 搜索失败: {e}"
+
+
+# ── Web Scraping 工具 ──
+
+
+@register("scrape", "抓取网页内容并提取文本。参数为 URL。例如 `scrape:https://example.com`")
+def tool_scrape(url: str) -> str:
+    """抓取网页，提取纯文本。"""
+    try:
+        import urllib.error
+        import urllib.request
+        from html.parser import HTMLParser
+
+        class TextExtractor(HTMLParser):
+            def __init__(self):
+                super().__init__()
+                self.text: list[str] = []
+                self.skip_tags = {"script", "style", "noscript", "iframe", "svg"}
+                self.current_tag: str | None = None
+
+            def handle_starttag(self, tag, _attrs):
+                self.current_tag = tag
+
+            def handle_endtag(self, tag):
+                if self.current_tag == tag:
+                    self.current_tag = None
+
+            def handle_data(self, data):
+                if self.current_tag not in self.skip_tags:
+                    stripped = data.strip()
+                    if stripped and len(stripped) > 2:
+                        self.text.append(stripped)
+
+        if not url.startswith(("http://", "https://")):
+            return "仅支持 HTTP/HTTPS URL"
+
+        req = urllib.request.Request(url, headers={"User-Agent": "BrianRAG/2.1", "Accept": "text/html"})
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            html = resp.read().decode("utf-8", errors="replace")
+
+        extractor = TextExtractor()
+        extractor.feed(html)
+        text = "\n".join(extractor.text[:50])
+        if len(text) > 4000:
+            text = text[:4000] + "\n...(内容已截断)"
+        return text or "未能提取有效文本内容。"
+    except urllib.error.HTTPError as e:
+        return f"HTTP {e.code}: {e.reason}"
+    except Exception as e:
+        logger.warning(f"Web scrape failed: {e}")
+        return f"抓取失败: {e}"
+
+
+# ── SQL 数据库查询工具 ──
+
+
+@register("sql", "查询本地 PostgreSQL 数据库。参数为 SQL SELECT 语句（只读）。例如 `sql:SELECT count(*) FROM chunks`")
+def tool_sql(query: str) -> str:
+    """安全执行只读 SQL 查询（SELECT 语句）"""
+    q_upper = query.strip().upper()
+    if not q_upper.startswith("SELECT"):
+        return "仅允许 SELECT 查询（只读）。"
+    # 禁止危险关键字
+    dangerous = ["DROP", "DELETE", "UPDATE", "INSERT", "ALTER", "CREATE", "TRUNCATE", "GRANT", "REVOKE"]
+    for keyword in dangerous:
+        if keyword in q_upper.split():
+            return f"禁止 {keyword} 操作（仅允许 SELECT 查询）。"
+
+    try:
+        import psycopg
+
+        from config import Config
+
+        conn_str = getattr(Config, "DATABASE_URL", "host=localhost dbname=brianrag user=postgres password=postgres")
+        with psycopg.connect(conn_str) as conn, conn.cursor() as cur:
+            cur.execute(query.strip())
+            rows = cur.fetchall()
+            if not rows:
+                return "(空结果)"
+
+            col_names = [desc[0] for desc in cur.description] if cur.description else []
+            # 限制返回行数
+            rows = rows[:50]
+
+            if col_names:
+                lines = [" | ".join(col_names), "-" * 40]
+                for row in rows:
+                    lines.append(" | ".join(str(v)[:80] for v in row))
+                result = "\n".join(lines)
+                if len(rows) == 50:
+                    result += "\n...(最多显示50行)"
+                return result
+            return str(rows)
+    except ImportError:
+        return "数据库功能不可用（缺少 psycopg 驱动）。"
+    except Exception as e:
+        return f"数据库查询失败: {e}"
+
+
+# ── 翻译工具 ──
+
+
+@register("translate", "中文↔英文翻译。参数格式为 `en:Hello world` 或 `zh:你好世界`")
+def tool_translate(text: str) -> str:
+    """使用 LLM 进行翻译"""
+    try:
+        import ollama
+
+        from config import Config
+
+        direction = "英译中"
+        content = text.strip()
+        if text.strip().lower().startswith("en:"):
+            direction = "英译中"
+            content = text.strip()[3:].strip()
+        elif text.strip().lower().startswith("zh:"):
+            direction = "中译英"
+            content = text.strip()[3:].strip()
+
+        response = ollama.chat(
+            model=getattr(Config, "LLM_MODEL", "qwen2.5:7b"),
+            messages=[{"role": "user", "content": f"请将以下文本{direction}。只输出翻译结果，不要额外解释：\n\n{content}"}],
+            options={"temperature": 0, "num_predict": 512},
+        )
+        return response["message"]["content"].strip()
+    except Exception as e:
+        return f"翻译失败: {e}"
+
+
+# ── JSON 格式化工具 ──
+
+
+@register("json", "格式化 JSON 或提取字段。参数为 JSON 字符串或 `key:value` 对。")
+def tool_json_format(text: str) -> str:
+    """格式化或查询 JSON 数据"""
+    import json as _json
+
+    try:
+        data = _json.loads(text.strip())
+        return _json.dumps(data, indent=2, ensure_ascii=False)[:4000]
+    except Exception:
+        pass
+
+    # 尝试 key:value 格式
+    if ":" in text:
+        try:
+            key, value = text.split(":", 1)
+            return _json.dumps({key.strip(): value.strip()}, indent=2, ensure_ascii=False)
+        except Exception:
+            pass
+
+    return "无法解析为有效 JSON。"
+
+
+# ── 合计工具信息 ──
+
+
+def get_tool_summary() -> dict[str, str]:
+    """返回所有已注册工具的名称和描述"""
+    return {name: info.get("description", "") if isinstance(info, dict) else str(info) for name, info in _registry.items()}
 
 
 # ── 初始化 ──

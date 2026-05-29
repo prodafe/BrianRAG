@@ -1,5 +1,60 @@
 # Changelog
 
+## [2.2.0] — 2026-05-29
+
+### 新增 (Features)
+
+**深度文档解析引擎** — 对标 RAGFlow 95 分文档解析能力
+- 标题层级保留 (H1-H6) + 列表结构 + 数学公式 + 水平线
+- 表格语义提取：列名、统计摘要 (min/max/avg/median)、行列数
+- Excel/CSV 多 sheet 结构化解析 (pandas)，保留 sheet 名称和列类型
+- 代码块语言自动检测与保留
+- 图片 AI 描述生成 (Ollama vision → 自动 caption 嵌入 chunk)
+- 电子邮件 (.eml) 完整解析：发件人/收件人/主题/正文/HTML 提取
+- 文档格式支持 17→30 种格式
+
+**ReAct Agent 循环** — 对标 Dify 95 分 Agent 能力
+- Thought → Action → Observation 完整 ReAct 循环
+- 并行工具执行 (ThreadPoolExecutor, 3 workers)
+- 工具错误自动重试 (exponential backoff)
+- JSON 结构化输出 (答案/引用/置信度/推理步骤)
+- 跨轮次会话记忆 (AgentMemory, 20 messages)
+- 工具链推理：自动检测需要工具并串联调用
+
+**Agent 工具扩展 (7→12)**
+- `wiki` — Wikipedia 中英文百科搜索
+- `scrape` — 网页抓取 + HTML 文本提取
+- `sql` — PostgreSQL 只读查询 (安全沙箱)
+- `translate` — 中英双向翻译 (LLM 驱动)
+- `json` — JSON 格式化/字段提取
+
+**多 Agent 系统增强**
+- Planner 分层规划：复杂度/目标/工具需求/答案类型分析
+- Retriever 并行检索 (ThreadPoolExecutor, 5 sub-queries)
+- Critic 增强：新增 relevance 评分
+- ReAct Agent 自动集成到多 Agent 编排
+
+**前端体验升级** — 对标 Dify 95 分前端体验
+- 暗黑/明亮模式一键切换 (CSS 变量动态注入)
+- 搜索历史持久化 (localStorage, 20 条)
+- 重新生成按钮 (retry)
+- 3 级响应式断点 (1200px / 900px / 640px)
+- 加载骨架屏动画 (skeleton shimmer)
+- 输入提示动画 (typing indicator bounce)
+- 移动端完整适配 (640px 以下)
+- 无障碍 focus-visible 支持
+
+### 更新 (Changes)
+- `utils/deep_doc_parser.py` — 555 行深度解析引擎 (新)
+- `core/agent_loop.py` — 270 行 ReAct Agent 循环 (新)
+- `core/tools.py` — 5 个新工具 (wiki/scrape/sql/translate/json)
+- `core/multi_agent.py` — 并行检索 + ReAct 集成 + 增强 Planner/Critic
+- `utils/document_loader.py` — 集成深度解析器 + .eml 支持 + 30 种格式
+- `frontend/styles/main.css` — +120 行: 3 响应式断点/暗黑模式/骨架屏/动效/无障碍
+- `frontend/js/app.js` — +60 行: 搜索历史/重新生成/暗黑切换/历史管理
+
+---
+
 ## [2.1.0] — 2026-05-28
 
 ### 修复 (Bug Fixes)

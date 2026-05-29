@@ -57,11 +57,32 @@ def _register_builtins():
             return []
         return [Document(page_content=content, metadata={"source": file_path, "type": "text"})]
 
+    def _deep_parse_doc(file_path):
+        """结构化深度解析器 — 保留标题层级、表格语义、代码、图片描述"""
+        try:
+            from utils.deep_doc_parser import deep_parse
+
+            docs = deep_parse(file_path)
+            if docs:
+                return docs
+        except ImportError:
+            pass
+        except Exception:
+            pass
+        # 回退到 unified + text loader
+        ext = os.path.splitext(file_path)[1].lower()
+        if ext in (".csv", ".xlsx", ".xls"):
+            return UnifiedDocumentLoader().load(file_path)
+        return _text(file_path)
+
     _loader_registry[".md"] = _md
     for e in [".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp"]:
         _loader_registry[e] = _img
-    for e in [".pdf", ".docx", ".html", ".txt", ".csv", ".pptx", ".xlsx", ".xml", ".rtf", ".odt", ".epub", ".py"]:
+    for e in [".pdf", ".docx", ".html", ".txt", ".pptx", ".xml", ".rtf", ".odt", ".epub"]:
         _loader_registry[e] = _unified
+    # 结构化格式使用深度解析器
+    for e in [".csv", ".xlsx", ".xls", ".py", ".eml"]:
+        _loader_registry[e] = _deep_parse_doc
     # Plain-text / script / config formats: unstructured can't handle, use text loader
     for e in [".json", ".sh", ".rviz", ".ldenc", ".yml", ".yaml", ".toml", ".ini", ".cfg"]:
         _loader_registry[e] = _text

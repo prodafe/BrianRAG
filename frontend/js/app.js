@@ -413,7 +413,7 @@ function renderKaTeX(formula, display) {
 }
 
 const App = (function () {
-  let aMode = 'rag', streaming = false, _cs = {}, _history = [], _abort = null;
+  let aMode = 'rag', streaming = false, _cs = {}, _history = [], _abort = null, _lastQuestion = '';
 
   const friendlyError = e => {
     const m = (e.message || String(e)).toLowerCase();
@@ -426,13 +426,28 @@ const App = (function () {
 
   function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
   function cS() { const el = $('#achat'); if (el) el.scrollTop = el.scrollHeight; }
-  function aM(role, html) { const d = document.createElement('div'); d.className = 'msg-m ' + role; d.innerHTML = `<div class="msg-av">${role === 'you' ? '?' : '?'}</div><div class="msg-bd">${html}</div>`; $('#achat').appendChild(d); return d; }
+  function aM(role, html) { const d = document.createElement('div'); d.className = 'msg-m ' + role; d.innerHTML = `<div class="msg-av">${role === 'you' ? '👤' : '🤖'}</div><div class="msg-bd">${html}</div>`; $('#achat').appendChild(d); return d; }
   function updatePhase(el, text) { let ph = el.querySelector('.phase-indicator'); if (!ph) { ph = document.createElement('div'); ph.className = 'phase-indicator'; ph.innerHTML = '<span class="phase-dot"></span><span class="phase-text"></span>'; el.querySelector('.msg-bd').prepend(ph); } ph.querySelector('.phase-text').textContent = text; }
+
+  // ── Search History ──
+  function loadHistory() { try { return JSON.parse(localStorage.getItem('brianrag_history') || '[]'); } catch(e) { return []; } }
+  function saveHistory(q) { let h = loadHistory(); h = h.filter(x => x !== q); h.unshift(q); if (h.length > 20) h.pop(); localStorage.setItem('brianrag_history', JSON.stringify(h)); }
+  function clearHistory() { localStorage.removeItem('brianrag_history'); }
+  function renderHistory() {
+    const h = loadHistory(); const qr = $('#quick-row'); if (!qr) return;
+    const existing = qr.querySelectorAll('.hist-group'); existing.forEach(e => e.remove());
+    if (!h.length) return;
+    const g = document.createElement('div'); g.className = 'hist-group';
+    g.innerHTML = `<div style="display:flex;align-items:center;justify-content:space-between;margin-top:12px;margin-bottom:4px"><span style="font-size:9px;color:var(--tm);text-transform:uppercase;letter-spacing:.1em">Recent</span><button onclick="App.clearSearchHistory()" style="background:none;border:none;color:var(--td);cursor:pointer;font-size:9px">clear</button></div>` + h.slice(0, 4).map(q => `<button class="quick-q hist-q">${esc(q)}</button>`).join('');
+    qr.appendChild(g);
+    g.querySelectorAll('.hist-q').forEach(b => b.addEventListener('click', () => { $('#qinput').value = b.textContent; send(); }));
+  }
 
   async function send() {
     if (streaming) { stopStream(); return; }
     const inp = $('#qinput'), q = inp.value.trim(); if (!q) return;
-    inp.value = ''; streaming = true;
+    _lastQuestion = q; inp.value = ''; streaming = true;
+    saveHistory(q); renderHistory();
     const btn = $('#sbtn'); btn.disabled = true; btn.classList.add('stop'); btn.textContent = 'Stop';
     const empt = $('#empt'); if (empt) empt.style.display = 'none';
     const um = aM('you', esc(q)); cS();
@@ -482,7 +497,7 @@ const App = (function () {
     srcs.forEach(function (s) { var f = s.file; if (f && !seen[f]) { seen[f] = 1; uf.push(f); } });
     var sb = uf.length ? ("<div class=\"src-bar\" style=\"margin-top:10px;padding:6px 10px;background:var(--gh);border-radius:6px;font-size:10px;color:var(--td)\">Based on " + uf.length + " source" + (uf.length > 1 ? "s" : "") + ": " + uf.slice(0, 5).map(function (f) { return "<code style=\"font-size:9px\">" + esc(f) + "</code>"; }).join(", ") + (uf.length > 5 ? ", …" : "") + "</div>") : "";
     var acts = document.createElement("div"); acts.className = "msg-acts";
-    acts.innerHTML = sb + "<button onclick=\"App.copyMsg(this)\">copy</button><button onclick=\"App.fb(this,'positive')\">\u{1F44D}</button><button onclick=\"App.fb(this,'negative')\">\u{1F44E}</button><span class=\"cf-badge\">" + lb + " conf</span>";
+    acts.innerHTML = sb + "<button onclick=\"App.copyMsg(this)\">copy</button><button onclick=\"App.regenerate()\">retry</button><button onclick=\"App.fb(this,'positive')\">👍</button><button onclick=\"App.fb(this,'negative')\">👎</button><span class=\"cf-badge\">" + lb + " conf</span>";
     el.querySelector(".msg-bd").appendChild(acts);
     var sl = document.getElementById("src-list");
     if (sl) sl.innerHTML = srcs.filter(function (s) { return s.file; }).map(function (s, i) { var c = _cs[String(i + 1)], t = c ? c.text : ""; return "<div class=\"src-item\" onclick=\"App.showChunk(" + (i + 1) + ")\" style=\"margin:6px 0;padding:6px;border-radius:4px;cursor:pointer;border-left:2px solid var(--gm)\"><div style=\"font-size:10px;color:var(--gold)\">[" + (i + 1) + "] " + esc(s.file || "unknown") + "</div><div style=\"font-size:9px;color:var(--td);margin-top:2px\">" + esc((t || "").slice(0, 80)) + (t && t.length > 80 ? "..." : "") + "</div></div>"; }).join("");
@@ -614,5 +629,54 @@ const App = (function () {
     } catch (e) { el.innerHTML = '<span style="color:#d55">' + e.message + '</span>'; }
   }
 
-  return { enter, leave, setMode, send, switchTab, copyMsg, fb, showCite, showChunk, showGraph, closeGraph, filterGraph, ghSync, runEval, delDoc, runPlayground };
+  function regenerate() {
+    if (!_lastQuestion) return;
+    $('#qinput').value = _lastQuestion;
+    send();
+  }
+
+  function toggleDarkMode() {
+    const root = document.documentElement;
+    const isDark = root.style.getPropertyValue('--ink') !== '#fafafa';
+    if (isDark) {
+      root.style.setProperty('--ink', '#fafafa');
+      root.style.setProperty('--cream', '#1a1a2e');
+      root.style.setProperty('--gold', '#8b6914');
+      root.style.setProperty('--td', 'rgba(26,26,46,.5)');
+      root.style.setProperty('--gh', 'rgba(139,105,20,.08)');
+      root.style.setProperty('--gm', 'rgba(139,105,20,.15)');
+      root.style.setProperty('--ash', 'rgba(245,245,250,.8)');
+      root.style.setProperty('--rise', 'rgba(235,235,245,.9)');
+      root.style.setProperty('--void', 'rgba(250,250,250,.9)');
+      root.style.setProperty('--tm', 'rgba(26,26,46,.28)');
+      root.style.setProperty('--gd', 'rgba(139,105,20,.3)');
+    } else {
+      root.style.setProperty('--ink', '#06060C');
+      root.style.setProperty('--cream', '#F5F0E8');
+      root.style.setProperty('--gold', '#D4C098');
+      root.style.setProperty('--td', 'rgba(245,240,232,.5)');
+      root.style.setProperty('--gh', 'rgba(212,192,152,.06)');
+      root.style.setProperty('--gm', 'rgba(212,192,152,.15)');
+      root.style.setProperty('--ash', 'rgba(14,14,26,.8)');
+      root.style.setProperty('--rise', 'rgba(24,24,48,.9)');
+      root.style.setProperty('--void', 'rgba(6,6,12,.9)');
+      root.style.setProperty('--tm', 'rgba(245,240,232,.28)');
+      root.style.setProperty('--gd', 'rgba(212,192,152,.4)');
+    }
+  }
+
+  function clearSearchHistory() { clearHistory(); renderHistory(); }
+
+  // ── Initialize dark mode toggle ──
+  (function initDarkModeToggle() {
+    const btn = document.createElement('button');
+    btn.className = 'dm-toggle'; btn.title = 'Toggle theme'; btn.textContent = '🌓';
+    btn.addEventListener('click', toggleDarkMode);
+    document.body.appendChild(btn);
+  })();
+
+  // ── Initialize search history ──
+  renderHistory();
+
+  return { enter, leave, setMode, send, switchTab, copyMsg, fb, showCite, showChunk, showGraph, closeGraph, filterGraph, ghSync, runEval, delDoc, runPlayground, regenerate, toggleDarkMode, clearSearchHistory };
 })();

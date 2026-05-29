@@ -8,14 +8,14 @@
 [![Ollama](https://img.shields.io/badge/Ollama-native-000000)](https://ollama.com/)
 [![CI](https://github.com/prodafe/BrianRAG/actions/workflows/ci.yml/badge.svg)](https://github.com/prodafe/BrianRAG/actions/workflows/ci.yml)
 [![Tests](https://img.shields.io/badge/tests-184%20passed-brightgreen)](https://github.com/prodafe/BrianRAG)
-[![Version](https://img.shields.io/badge/version-2.1.0-d4c098)](https://github.com/prodafe/BrianRAG/releases)
+[![Version](https://img.shields.io/badge/version-2.2.0-d4c098)](https://github.com/prodafe/BrianRAG/releases)
 [![Ruff](https://img.shields.io/badge/code%20style-ruff-000000)](https://github.com/astral-sh/ruff)
 
 <p align="center">
   <img src="frontend/Brian.png" alt="BrianRAG" width="180">
 </p>
 
-混合检索（BM25 + 向量 + 知识图谱 RRF）· GraphRAG 社区摘要 · 多 Agent 协作（Planner/Retriever/Critic）· 可视化工作流引擎 · Memory 系统 · 父子分块 · 20 数据源连接器 · PDF 表格提取 · VLM 图片理解 · 7 Agent 工具 · PWA 离线 · i18n 中英双语 · 独立管理后台 · RAGAS 自动化评估 · 全部本地运行。
+混合检索（BM25 + 向量 + 知识图谱 RRF）· GraphRAG 社区摘要 · ReAct Agent 循环 · 多 Agent 协作（Planner/Retriever/Critic/ReAct）· 可视化工作流引擎 · Memory 系统 · 父子分块 · 30 文档格式 · 深度文档解析引擎 · PDF 版式分析 + 表格提取 · VLM 图片理解 · 12 Agent 工具 · PWA 离线 · i18n 中英双语 · 独立管理后台 · 暗黑模式切换 · RAGAS 自动化评估 · 全部本地运行。
 
 ---
 
@@ -94,7 +94,9 @@ python run.py
 
 ### 智能体编排
 
-- **ReAct Agent** 自主规划检索策略
+- **ReAct Agent** 自主规划检索策略（Thought → Action → Observation 循环）
+- **12 个内置工具**：calc/time/unit/search/code/api/file_read/wiki/scrape/sql/translate/json
+- **并行工具执行** + 自动错误重试
 - **LangGraph 多步推理**：检索→重排→生成→评估→改写
 - **查询优化**：HyDE 假设文档 + 多查询融合（单次 LLM 调用完成）
 
@@ -142,10 +144,15 @@ LLM_PROVIDER = "ollama"  # 或 "openai" / "anthropic"
 ### 文档解析
 
 - **PDF 版式分析器**：多栏检测、阅读顺序排序、表格结构保留、标题层级识别、图片提取
+- **深度文档解析引擎**：标题层级保留(H1-H6)、列表/公式/代码块/水平线全保留
+- **表格语义提取**：列名 + 统计摘要(min/max/avg/median) + 行列数 + 列类型
+- **Excel/CSV 多 sheet 解析**：保留 sheet 名称、列类型、数据采样
 - **OCR 双引擎**：PaddleOCR + Tesseract，自动检测扫描件 PDF 并提取文字
+- **图片 AI 描述**：Ollama vision 自动生成图片 caption 嵌入 chunk
+- **电子邮件解析**：.eml 格式完整支持（发件人/主题/正文/HTML）
 - 按 `##`/`###` 章节智能切分 + 语义分块（bge-m3 相似度检测话题边界）
 - **Loader 插件注册表**：`@register_loader(['.xyz'])` 自定义解析器
-- 支持 17 种格式：`.pdf` `.md` `.docx` `.html` `.csv` `.pptx` `.xlsx` `.png` `.jpg` `.zip` 等
+- 支持 30 种格式：`.pdf` `.md` `.docx` `.html` `.csv` `.pptx` `.xlsx` `.eml` `.epub` `.odt` `.rtf` `.xml` `.json` `.py` `.sh` `.yml` `.toml` 等
 
 ### 多租户 & 安全
 
@@ -156,8 +163,9 @@ LLM_PROVIDER = "ollama"  # 或 "openai" / "anthropic"
 
 ### 工具调用
 
-- **3 个内置工具**：calc 计算器 / time 时间日期 / unit 单位换算
+- **12 个内置工具**：calc 计算器 / time 时间日期 / unit 单位换算 / search 网络搜索 / code 代码沙箱 / api HTTP调用 / file_read 文件读取 / wiki Wikipedia百科 / scrape 网页抓取 / sql 数据库查询 / translate 中英翻译 / json 格式化
 - LLM 通过 `[TOOL:calc:2+3*4]` 格式调用，系统自动执行并重新生成
+- 并行工具执行 + 自动错误重试 + 工具链推理
 - `@register("name", "description")` 装饰器零侵入扩展
 
 ---
@@ -176,7 +184,9 @@ LLM_PROVIDER = "ollama"  # 或 "openai" / "anthropic"
 - 可切换参数面板（Top-K、Alpha、Self-Correct、HyDE、MMR）
 - 文档上传（拖拽/点击）+ 异步索引（进度轮询）
 - 停止生成（Esc / Stop 按钮）+ 友好错误提示
-- 复制 / 👍👎 反馈 / 引用弹窗 / 置信度徽章
+- 复制 / 重新生成 / 👍👎 反馈 / 引用弹窗 / 置信度徽章
+- 搜索历史 (localStorage 持久化) / 暗黑模式一键切换
+- 3 级响应式适配 (桌面→平板→手机)
 
 ---
 
@@ -210,42 +220,46 @@ LLM_PROVIDER = "ollama"  # 或 "openai" / "anthropic"
 brianrag/
 ├── api/main.py              # FastAPI 应用（所有 REST 端点）
 ├── core/
-│   ├── rag_pipeline.py      # RAG 管线编排（query / stream / agentic / graph / multimodal）
-│   ├── retriever.py         # 混合检索器（BM25 + pgvector + 知识图谱 + 多模态）
-│   ├── generator.py         # 答案生成器（prompt 工程 + 语义缓存）
-│   ├── query_optimizer.py   # 查询优化（HyDE / 多查询 / 同义词扩展）
-│   ├── intent_classifier.py # 意图分类（formula / definition / procedure / image / general）
-│   ├── reranker.py          # BGE Cross-encoder 重排序
-│   ├── prewarm.py           # 预训练缓存引擎
-│   ├── self_correction.py   # 答案质量自评与修正
-│   ├── graph_builder.py     # 知识图谱构建与检索
+│   ├── rag_pipeline.py      # RAG 管线编排
+│   ├── retriever.py         # 混合检索器
+│   ├── generator.py         # 答案生成器
+│   ├── query_optimizer.py   # 查询优化（HyDE/多查询）
 │   ├── agents.py            # LangGraph 多模态智能体
+│   ├── agent_loop.py        # ReAct Agent 循环 (NEW)
+│   ├── multi_agent.py       # 多 Agent 编排 (Planner/Retriever/Critic/ReAct)
+│   ├── tools.py             # 工具调用系统 (12 tools)
+│   ├── workflow_engine.py   # Agent 可视化工作流引擎
+│   ├── memory.py            # 用户记忆系统
+│   ├── graph_builder.py     # 知识图谱构建与检索
 │   ├── graph_workflow.py    # LangGraph 迭代 RAG 工作流
+│   ├── reranker.py          # BGE Cross-encoder 重排序
+│   ├── self_correction.py   # 答案质量自评与修正
+│   ├── prewarm.py           # 预训练缓存引擎
 │   ├── llm_provider.py      # LLM/Embedding 可插拔抽象层
+│   ├── chunking.py          # 父子分块 + Table-aware
+│   ├── intent_classifier.py # 意图分类
+│   ├── model_router.py      # 模型智能路由
 │   ├── metrics.py           # Prometheus 指标
 │   └── telemetry.py         # OpenTelemetry 追踪
 ├── utils/
-│   ├── document_loader.py   # 文档加载（注册表+版式分析+OCR）
-│   ├── layout_analyzer.py   # PDF 版式分析器（多栏/表格/标题）
-│   ├── ocr.py               # OCR 引擎（PaddleOCR + Tesseract）
+│   ├── document_loader.py   # 文档加载 (30 种格式)
+│   ├── deep_doc_parser.py   # 深度文档解析引擎 (NEW)
+│   ├── layout_analyzer.py   # PDF 版式分析器
+│   ├── ocr.py               # OCR 引擎 (PaddleOCR + Tesseract)
+│   ├── data_connectors.py   # 20 数据源连接器
 │   ├── auth.py              # 多租户 + RBAC 权限系统
 │   ├── session_manager.py   # Redis 会话管理
 │   ├── github_sync.py       # GitHub 仓库同步
-│   ├── dir_watcher.py       # 文件系统监控（增量索引）
-│   ├── history_manager.py   # 对话历史管理
-│   └── hot_question_tracker.py  # 热点问题追踪
-├── core/
-│   ├── tools.py             # 工具调用系统（calc/time/unit）
-│   ├── agents.py            # LangGraph 多模态智能体
-│   ├── graph_workflow.py    # 迭代 RAG 工作流
-│   └── prewarm.py           # 预训练缓存引擎
-├── evaluation/evaluate.py   # RAGAS 评估脚本
-├── frontend/index.html      # 前端（Three.js + GSAP + Chat UI）
-├── tests/                   # 46 tests, 5 模块
+│   └── dir_watcher.py       # 文件系统监控
+├── frontend/
+│   ├── index.html           # Three.js 着陆页 + 聊天面板
+│   ├── admin.html           # 独立管理后台
+│   ├── styles/main.css      # 暗黑主题 + 3 响应式断点
+│   ├── js/app.js            # SSE 流式 + 搜索历史 + 暗黑切换
+│   └── js/i18n.js           # 60 键中英双语
+├── tests/                   # 172 tests, 20 测试模块
 ├── config.py                # pydantic-settings 配置
-├── run.py                   # 启动入口
-├── pyproject.toml           # Python 打包标准
-└── data/                    # 文档 + 元数据
+└── run.py                   # 启动入口
 ```
 
 ---
@@ -304,7 +318,7 @@ brianrag/
   author = {Brian},
   title = {BrianRAG: Enterprise Knowledge Engine},
   year = {2026},
-  version = {2.0.0},
+  version = {2.2.0},
   url = {https://github.com/prodafe/BrianRAG}
 }
 ```

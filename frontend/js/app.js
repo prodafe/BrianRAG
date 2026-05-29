@@ -478,7 +478,7 @@ const App = (function () {
       body.innerHTML = body.innerHTML.replace(/<span class="phase-dot"[^>]*><\/span>/g, '');
       const ph = am.querySelector('.phase-indicator'); if (ph) ph.remove();
       if (ans) fin(am, ans, cit, chunks, chunkSources);
-      _history.push({ role: 'you', text: q }); _history.push({ role: 'ai', answer: ans }); if (_history.length > 12) _history.splice(0, 2);
+      _history.push({ role: 'you', text: q }); _history.push({ role: 'ai', answer: ans }); if (_history.length > 50) _history.splice(0, 2);
     } catch (e) {
       if (e.name === 'AbortError') { am.querySelector('.msg-bd').innerHTML = '<span style="color:var(--td)">已取消。</span>'; }
       else { am.querySelector('.msg-bd').innerHTML = '<span style="color:#d55">' + friendlyError(e) + '</span>'; }
@@ -566,8 +566,8 @@ const App = (function () {
   }
 
   async function chkH() { try { const r = await fetch('/api/health'); const d = await r.json(); const svc = d.services || {}; const dots = []; for (const [k, v] of Object.entries(svc)) { const cls = v === 'ok' ? 'g' : (v === 'unavailable' ? 'r' : 'y'); dots.push(`<span class="sd"><span class="d ${cls}"></span>${esc(k)}</span>`); } $('#stat-bar').innerHTML = dots.join('') || '...'; } catch (e) { $('#stat-bar').innerHTML = '<span class="sd"><span class="d r"></span>offline</span>'; } }
-  async function chkP() { try { const r = await fetch('/api/prewarm/status'); const d = await r.json(); $('#prewarm-stat').innerHTML = `<p style="font-size:10px;color:var(--td)">${d.cached_qa_pairs || 0}/${d.target_count || 150} QA pairs</p>`; return d; } catch (e) { } }
-  async function chkG() { try { const r = await fetch('/api/github/status'); const d = await r.json(); if (!d.configured) { $('#gh-stat').innerHTML = '<p style="font-size:10px;color:var(--td)">not configured</p>'; return; } const s = d.cloned ? `cloned (${d.document_count || 0} docs)` : 'not cloned'; $('#gh-stat').innerHTML = `<p style="font-size:10px;color:var(--td)">${s}</p>`; return d; } catch (e) { $('#gh-stat').innerHTML = '<p style="font-size:10px;color:var(--td)">error</p>'; } }
+  async function chkP() { try { const r = await fetch('/api/prewarm/status'); const d = await r.json(); $('#prewarm-stat').innerHTML = `<p style="font-size:10px;color:var(--td)">${d.cached_qa_pairs || 0}/${d.target_count || 150} QA pairs</p>`; return d; } catch (e) { console.debug('Prewarm status check failed', e); } }
+  async function chkG() { try { const r = await fetch('/api/github/status'); const d = await r.json(); if (!d.configured) { $('#gh-stat').innerHTML = '<p style="font-size:10px;color:var(--td)">not configured</p>'; return; } const s = d.cloned ? `cloned (${d.document_count || 0} docs)` : 'not cloned'; $('#gh-stat').innerHTML = `<p style="font-size:10px;color:var(--td)">${s}</p>`; return d; } catch (e) { console.debug('GitHub status check failed', e); $('#gh-stat').innerHTML = '<p style="font-size:10px;color:var(--td)">error</p>'; } }
   async function ghSync() { try { const r = await fetch('/api/github/sync', { method: 'POST' }); const d = await r.json(); $('#gh-stat').innerHTML = `<p style="font-size:10px;color:var(--cream)">${d.message || 'synced'}</p>`; ldD(); } catch (e) { $('#gh-stat').innerHTML = '<p style="font-size:10px;color:#d55">failed</p>'; } }
   async function runEval() { try { await fetch('/api/eval?limit=10', { method: 'POST' }); alert('Eval started.'); } catch (e) { } }
   function updC(n) { const el = $('#doc-count-label'); if (el) el.textContent = n + ' docs'; }

@@ -404,7 +404,7 @@ class HybridRetriever:
             sync_db_url = Config.DATABASE_URL.replace("postgresql://", "postgresql+psycopg://")
             self.db_engine = create_engine(sync_db_url, pool_size=10, max_overflow=20, pool_pre_ping=True, echo=False)
             self.pg_engine = PGEngine.from_connection_string(url=sync_db_url)
-            self.table_name = "brianrag_vectors"
+            self.table_name = "brianrag_vectors"  # 硬编码，非用户输入，安全
             self.pg_engine.init_vectorstore_table(
                 table_name=self.table_name, vector_size=self.dim, overwrite_existing=True
             )

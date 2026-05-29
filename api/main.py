@@ -7,7 +7,9 @@ import sys
 import time
 import uuid
 import zipfile
+from collections.abc import AsyncIterator
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import asynccontextmanager
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -45,7 +47,51 @@ tags_metadata = [
     {"name": "GitHub Sync", "description": "GitHub 数据源同步"},
 ]
 
-app = FastAPI(title="BrianRAG API", version="2.1.0", openapi_tags=tags_metadata,
+# ---------- Lifespan (FastAPI 推荐方式，替代弃用的 on_event) ----------
+@asynccontextmanager
+async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    global _history_manager, _scheduler, _watcher_observer, _bg_executor
+    try:
+        _history_manager = HistoryManager()
+        logger.info("历史管理器初始化成功")
+    except Exception as e:
+        logger.warning(f"历史管理器初始化失败: {e}")
+
+    _scheduler = BackgroundScheduler()
+    _scheduler.add_job(prewarm_hot_questions, "interval", seconds=Config.HOT_QUESTION_PREWARM_INTERVAL)
+
+    github_interval = getattr(Config, "GITHUB_SYNC_INTERVAL", 0)
+    if github_interval > 0:
+        _scheduler.add_job(_github_auto_sync, "interval", seconds=github_interval, id="github_sync")
+        _scheduler.add_job(_github_auto_sync, "date", run_date=__import__("datetime").datetime.now())
+        logger.info(f"GitHub 自动同步已启动（每 {github_interval}s）")
+
+    _scheduler.start()
+    logger.info("后台调度器已启动")
+
+    try:
+        _watcher_observer = start_watcher()
+        logger.info("目录监控已启动")
+    except Exception as e:
+        logger.warning(f"目录监控启动失败: {e}")
+
+    yield
+
+    if _scheduler:
+        _scheduler.shutdown(wait=False)
+        logger.info("调度器已停止")
+    if _watcher_observer:
+        _watcher_observer.stop()
+        _watcher_observer.join()
+        logger.info("目录监控已停止")
+    if _bg_executor:
+        _bg_executor.shutdown(wait=True)
+        logger.info("后台线程池已关闭")
+    close_redis()
+    logger.info("Redis 连接池已关闭")
+
+
+app = FastAPI(title="BrianRAG API", version="2.2.0", lifespan=lifespan, openapi_tags=tags_metadata,
               description="Enterprise Knowledge Engine — 本地优先 RAG 知识库问答系统。支持混合检索、知识图谱、多模态。")
 
 # ── API Key 鉴权（可选，通过环境变量 BRIAN_API_KEY 启用）──
@@ -124,58 +170,6 @@ def prewarm_hot_questions():
             logger.error(f"预热失败 {q}: {e}")
 
 
-# ---------- 启动/关闭事件 ----------
-@app.on_event("startup")
-def start_scheduler_and_watcher():
-    global _history_manager
-    # 初始化历史管理器
-    try:
-        _history_manager = HistoryManager()
-        logger.info("历史管理器初始化成功")
-    except Exception as e:
-        logger.warning(f"历史管理器初始化失败: {e}")
-
-    global _scheduler
-    # 1. 启动热点问题预热调度器
-    _scheduler = BackgroundScheduler()
-    scheduler = _scheduler
-    scheduler.add_job(prewarm_hot_questions, "interval", seconds=Config.HOT_QUESTION_PREWARM_INTERVAL)
-
-    # 2. GitHub 自动同步
-    github_interval = getattr(Config, "GITHUB_SYNC_INTERVAL", 0)
-    if github_interval > 0:
-        scheduler.add_job(_github_auto_sync, "interval", seconds=github_interval, id="github_sync")
-        # 首次启动时检查一次
-        scheduler.add_job(_github_auto_sync, "date", run_date=__import__("datetime").datetime.now())
-        logger.info(f"GitHub 自动同步已启动（每 {github_interval}s）")
-
-    scheduler.start()
-    logger.info("后台调度器已启动")
-
-    # 3. 启动目录监控
-    global _watcher_observer
-    try:
-        _watcher_observer = start_watcher()
-        logger.info("目录监控已启动")
-    except Exception as e:
-        logger.warning(f"目录监控启动失败: {e}")
-
-
-@app.on_event("shutdown")
-def shutdown_watcher():
-    global _watcher_observer, _scheduler, _bg_executor
-    if _scheduler:
-        _scheduler.shutdown(wait=False)
-        logger.info("调度器已停止")
-    if _watcher_observer:
-        _watcher_observer.stop()
-        _watcher_observer.join()
-        logger.info("目录监控已停止")
-    if _bg_executor:
-        _bg_executor.shutdown(wait=True)
-        logger.info("后台线程池已关闭")
-    close_redis()
-    logger.info("Redis 连接池已关闭")
 
 
 # ---------- 历史相关 API ----------

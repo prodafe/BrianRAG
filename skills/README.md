@@ -2,7 +2,7 @@
 
 在 Claude Code 中使用 `/skill-name` 一键调用。
 
-> **v1.1** (2026-05-29): 审计清单新增 XSS/innerHTML 检查；bench 评分更新至 v2.2.1；dev 规范新增 agent_loop / deep_doc_parser / tools 模块。
+> **v1.1** (2026-05-29): 审计清单新增 XSS/innerHTML 检查；bench 评分更新至 v2.3.0；dev 规范新增 agent_loop / deep_doc_parser / tools 模块。
 
 ---
 

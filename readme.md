@@ -8,7 +8,7 @@
 [![Ollama](https://img.shields.io/badge/Ollama-native-000000)](https://ollama.com/)
 [![CI](https://github.com/prodafe/BrianRAG/actions/workflows/ci.yml/badge.svg)](https://github.com/prodafe/BrianRAG/actions/workflows/ci.yml)
 [![Tests](https://img.shields.io/badge/tests-184%20passed-brightgreen)](https://github.com/prodafe/BrianRAG)
-[![Version](https://img.shields.io/badge/version-2.2.2-d4c098)](https://github.com/prodafe/BrianRAG/releases)
+[![Version](https://img.shields.io/badge/version-2.3.0-d4c098)](https://github.com/prodafe/BrianRAG/releases)
 [![Ruff](https://img.shields.io/badge/code%20style-ruff-000000)](https://github.com/astral-sh/ruff)
 
 <p align="center">
@@ -318,7 +318,7 @@ brianrag/
   author = {Brian},
   title = {BrianRAG: Enterprise Knowledge Engine},
   year = {2026},
-  version = {2.2.2},
+  version = {2.3.0},
   url = {https://github.com/prodafe/BrianRAG}
 }
 ```

@@ -1,5 +1,30 @@
 # Changelog
 
+## [2.3.0] — 2026-05-29
+
+### 性能优化 (Performance)
+
+**检索延迟 11x 提升** — P50 1470ms→132ms, P95 2046ms→190ms
+- 默认关闭 `ENABLE_MULTI_QUERY`（每次查询省 8s LLM 调用）
+- BM25 热路径优化：`jieba.analyse.extract_tags` → `jieba.cut_for_search`（82% 提速）
+- 4 级缓存体系：查询缓存 + 向量结果缓存 + 图谱缓存 + 多查询缓存
+- 图谱快速匹配：子串匹配已知实体（无 LLM 调用），LLM 提取仅作回退
+- 多查询生成参数优化：temperature 0.7→0.1, num_predict 200→80
+
+### 修复 (Bug Fixes)
+
+- 文档解析器 `_text` 闭包变量泄露 → 移除局部 `from Document import`
+- `PGVectorStore._embedding` 私有属性不可访问 → 缓存完整向量搜索结果
+
+### 依赖 (Dependencies)
+
+- `requirements.txt` 新增 `duckduckgo-search>=6.0` + `portalocker>=3.0`
+
+### 测试
+- 172 tests passed, 0 lint errors
+
+---
+
 ## [2.2.2] — 2026-05-29
 
 ### 修复 (Bug Fixes)

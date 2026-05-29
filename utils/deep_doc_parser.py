@@ -240,8 +240,8 @@ class SpreadsheetDeepParser:
 
             df = pd.read_csv(file_path, nrows=1000)
             return self._dataframe_to_elements(df, source, os.path.basename(file_path))
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Pandas CSV parse failed, falling back to csv module: {e}")
 
         with open(file_path, encoding="utf-8-sig") as f:
             reader = csv.reader(f)
@@ -373,8 +373,8 @@ class EmailParser:
                         if payload:
                             s.feed(payload.decode("utf-8", errors="replace"))
                             body += s.text
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logger.debug(f"Email HTML body parse failed: {e}")
         else:
             payload = msg.get_payload(decode=True)
             if payload:

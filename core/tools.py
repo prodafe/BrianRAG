@@ -499,8 +499,8 @@ def tool_json_format(text: str) -> str:
     try:
         data = _json.loads(text.strip())
         return _json.dumps(data, indent=2, ensure_ascii=False)[:4000]
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f"JSON parse failed, trying key:value format: {e}")
 
     # 尝试 key:value 格式
     if ":" in text:

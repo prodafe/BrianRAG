@@ -565,7 +565,7 @@ const App = (function () {
     }
   }
 
-  async function chkH() { try { const r = await fetch('/api/health'); const d = await r.json(); const svc = d.services || {}; const dots = []; for (const [k, v] of Object.entries(svc)) { const cls = v === 'ok' ? 'g' : (v === 'unavailable' ? 'r' : 'y'); dots.push(`<span class="sd"><span class="d ${cls}"></span>${k}</span>`); } $('#stat-bar').innerHTML = dots.join('') || '...'; } catch (e) { $('#stat-bar').innerHTML = '<span class="sd"><span class="d r"></span>offline</span>'; } }
+  async function chkH() { try { const r = await fetch('/api/health'); const d = await r.json(); const svc = d.services || {}; const dots = []; for (const [k, v] of Object.entries(svc)) { const cls = v === 'ok' ? 'g' : (v === 'unavailable' ? 'r' : 'y'); dots.push(`<span class="sd"><span class="d ${cls}"></span>${esc(k)}</span>`); } $('#stat-bar').innerHTML = dots.join('') || '...'; } catch (e) { $('#stat-bar').innerHTML = '<span class="sd"><span class="d r"></span>offline</span>'; } }
   async function chkP() { try { const r = await fetch('/api/prewarm/status'); const d = await r.json(); $('#prewarm-stat').innerHTML = `<p style="font-size:10px;color:var(--td)">${d.cached_qa_pairs || 0}/${d.target_count || 150} QA pairs</p>`; return d; } catch (e) { } }
   async function chkG() { try { const r = await fetch('/api/github/status'); const d = await r.json(); if (!d.configured) { $('#gh-stat').innerHTML = '<p style="font-size:10px;color:var(--td)">not configured</p>'; return; } const s = d.cloned ? `cloned (${d.document_count || 0} docs)` : 'not cloned'; $('#gh-stat').innerHTML = `<p style="font-size:10px;color:var(--td)">${s}</p>`; return d; } catch (e) { $('#gh-stat').innerHTML = '<p style="font-size:10px;color:var(--td)">error</p>'; } }
   async function ghSync() { try { const r = await fetch('/api/github/sync', { method: 'POST' }); const d = await r.json(); $('#gh-stat').innerHTML = `<p style="font-size:10px;color:var(--cream)">${d.message || 'synced'}</p>`; ldD(); } catch (e) { $('#gh-stat').innerHTML = '<p style="font-size:10px;color:#d55">failed</p>'; } }
@@ -573,7 +573,7 @@ const App = (function () {
   function updC(n) { const el = $('#doc-count-label'); if (el) el.textContent = n + ' docs'; }
 
   async function ldD() {
-    try { const r = await fetch('/api/documents'); const d = await r.json(); const docs = d.documents || []; updC(docs.length); if (!docs.length) { $('#dlist').innerHTML = '<p style="font-size:10px;color:var(--td)">no documents</p>'; return; } $('#dlist').innerHTML = docs.map(d => { const n = d.path.split(/[/\\]/).pop(); return `<div class="doc-row"><span>${esc(n)}</span><span class="del" onclick="App.delDoc('${d.hash}')" title="删除此文档">x</span></div>`; }).join(''); } catch (e) { }
+    try { const r = await fetch('/api/documents'); const d = await r.json(); const docs = d.documents || []; updC(docs.length); if (!docs.length) { $('#dlist').innerHTML = '<p style="font-size:10px;color:var(--td)">no documents</p>'; return; } $('#dlist').innerHTML = docs.map(d => { const n = d.path.split(/[/\\]/).pop(); return `<div class="doc-row"><span>${esc(n)}</span><span class="del" onclick="App.delDoc('${esc(d.hash || '').replace(/'/g, "\\'")}')" title="删除此文档">x</span></div>`; }).join(''); } catch (e) { }
   }
 
   async function delDoc(h) { await fetch('/api/documents/' + h, { method: 'DELETE' }); ldD(); }

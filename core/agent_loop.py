@@ -116,8 +116,8 @@ class ReActAgent:
             try:
                 texts, _indices = self.retriever.hybrid_search(question, top_k=5)
                 context = "\n".join(texts[:5])
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Retriever fallback failed: {e}")
 
         # ReAct 循环
         final_answer = ""
@@ -290,8 +290,8 @@ Action Input: [工具参数 或 最终答案]
                     reasoning_steps=data.get("reasoning_steps", []),
                     follow_up_questions=data.get("follow_up_questions", []),
                 )
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Structured output parsing failed: {e}")
 
         return StructuredOutput(answer=raw_answer, confidence=0.8)
 

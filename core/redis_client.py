@@ -1,16 +1,23 @@
 """Redis 客户端 — 共享连接池，避免连接泄漏"""
 
+from __future__ import annotations
+
+import contextlib
 import logging
 import threading
+from typing import TYPE_CHECKING
 from urllib.parse import urlparse
+
+if TYPE_CHECKING:
+    import redis
 
 logger = logging.getLogger(__name__)
 
-_pools: dict[int, "redis.ConnectionPool"] = {}
+_pools: dict[int, redis.ConnectionPool] = {}
 _pools_lock = threading.Lock()
 
 
-def get_redis(db: int = 0, decode_responses: bool = True, socket_connect_timeout: int = 2) -> "redis.Redis":
+def get_redis(db: int = 0, decode_responses: bool = True, socket_connect_timeout: int = 2) -> redis.Redis:
     """Return a Redis client backed by a shared connection pool.
 
     Pools are cached per-db so each db number gets its own pool.
@@ -54,8 +61,6 @@ def close_all():
     """Disconnect all shared connection pools. Call on app shutdown."""
     global _pools
     for db, pool in _pools.items():
-        try:
+        with contextlib.suppress(Exception):
             pool.disconnect()
-        except Exception:
-            pass
     _pools.clear()

@@ -4,6 +4,7 @@
 存储: Redis（短期对话记忆）+ 关键事实提取（长期记忆）
 """
 
+import contextlib
 import json
 import logging
 import time
@@ -74,10 +75,8 @@ class UserMemory:
         try:
             raw = self.redis.hgetall(self._key("entries"))
             for k, v in (raw or {}).items():
-                try:
+                with contextlib.suppress(json.JSONDecodeError, KeyError):
                     self._memories[k] = MemoryEntry.from_dict(json.loads(v))
-                except (json.JSONDecodeError, KeyError):
-                    pass
         except Exception:
             pass
         self._loaded = True

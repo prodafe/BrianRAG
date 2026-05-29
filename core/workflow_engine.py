@@ -106,10 +106,7 @@ class WorkflowEngine:
 
         # Collect final output
         output_nodes = [n for n in workflow.nodes if n.type == NodeType.OUTPUT]
-        if output_nodes:
-            final = state["node_outputs"].get(output_nodes[0].id, {})
-        else:
-            final = state
+        final = state["node_outputs"].get(output_nodes[0].id, {}) if output_nodes else state
 
         return {"result": final, "state": state, "workflow_id": workflow.id}
 

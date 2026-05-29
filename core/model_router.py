@@ -59,10 +59,7 @@ class ModelRouter:
         q_lower = question.lower()
         threshold = getattr(Config, "complex_threshold_keywords", None)
         keywords = threshold if threshold else _COMPLEX_KEYWORDS
-        for kw in keywords:
-            if kw in q_lower:
-                return True
-        return False
+        return any(kw in q_lower for kw in keywords)
 
     @property
     def stats(self) -> dict:

@@ -164,10 +164,7 @@ def build_parent_context(
     seen = set()
 
     for idx in child_indices:
-        if child_to_parent and idx in child_to_parent:
-            p_idx = child_to_parent[idx]
-        else:
-            p_idx = idx // 2  # 默认每2个子块对应1个父块
+        p_idx = child_to_parent[idx] if child_to_parent and idx in child_to_parent else idx // 2
         if p_idx not in seen:
             seen.add(p_idx)
             parent_texts.append(child_docs[idx].page_content if idx < len(child_docs) else "")

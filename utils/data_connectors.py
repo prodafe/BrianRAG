@@ -266,9 +266,8 @@ class S3Connector:
         count = 0
         for f in files:
             local = os.path.join(target_dir, os.path.basename(f["key"]))
-            if not os.path.exists(local):
-                if self.download_file(f["key"], local):
-                    count += 1
+            if not os.path.exists(local) and self.download_file(f["key"], local):
+                count += 1
         logger.info(f"S3 sync complete: {count} new files")
         return count
 
@@ -445,9 +444,8 @@ class WebDAVConnector:
             req.add_header("Authorization", f"Basic {creds}")
         try:
             _os.makedirs(_os.path.dirname(local_path), exist_ok=True)
-            with urllib.request.urlopen(req, timeout=30) as resp:
-                with open(local_path, "wb") as f:
-                    f.write(resp.read())
+            with urllib.request.urlopen(req, timeout=30) as resp, open(local_path, "wb") as f:
+                f.write(resp.read())
             return True
         except Exception as e:
             logger.error(f"WebDAV download failed: {e}")

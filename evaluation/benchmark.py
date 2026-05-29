@@ -1,5 +1,6 @@
 """BrianRAG 性能基准测试 — 检索延迟、答案质量评估"""
 
+import contextlib
 import json
 import logging
 import statistics
@@ -52,10 +53,8 @@ def benchmark_retrieval(
     # Warmup
     for _ in range(warmup_runs):
         for q in qs:
-            try:
+            with contextlib.suppress(Exception):
                 pipeline.retriever.hybrid_search(q)
-            except Exception:
-                pass
 
     # Benchmark
     details = []

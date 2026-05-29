@@ -380,10 +380,8 @@ def config_override(**kwargs):
     finally:
         for k, prev in saved.items():
             if prev is _SENTINEL:
-                try:
+                with contextlib.suppress(AttributeError):
                     delattr(_overrides, k)
-                except AttributeError:
-                    pass
             else:
                 setattr(_overrides, k, prev)
 

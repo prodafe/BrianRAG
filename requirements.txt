@@ -61,6 +61,8 @@ torch>=2.4.0
 pandas>=2.2
 pillow>=10.4
 chardet>=5.2
+duckduckgo-search>=6.0
+portalocker>=3.0
 
 # OCR (optional — uncomment to install)
 # paddlepaddle>=3.0  # required by paddleocr, install separately

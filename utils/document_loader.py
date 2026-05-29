@@ -49,8 +49,6 @@ def _register_builtins():
 
     def _text(file_path):
         """Plain text loader — read file as-is, split into chunks."""
-        from langchain_core.documents import Document
-
         with open(file_path, encoding="utf-8", errors="replace") as f:
             content = f.read()
         if not content.strip():

@@ -145,7 +145,7 @@ JSON："""
             prompt = f"""请将以下问题用{num_queries}种不同的方式重新表述，保持原意。每行一个，不要编号。
 问题：{question}
 不同表述："""
-            resp = self._llm.generate(prompt, options={"temperature": 0.7, "num_predict": 200})
+            resp = self._llm.generate(prompt, options={"temperature": 0.1, "num_predict": 80})
             lines = [line.strip() for line in resp.split("\n") if line.strip()]
             queries = [line for line in lines if not line.startswith("不同表述") and not line.startswith("问题")]
             queries = list(dict.fromkeys(queries))[:num_queries]

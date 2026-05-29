@@ -1,0 +1,29 @@
+{
+  "timestamp": "20260529_111711",
+  "aggregate": {
+    "faithfulness": 0,
+    "relevancy": 0,
+    "context_recall": 0,
+    "total_time_s": 32.1,
+    "queries": 4,
+    "errors": 4
+  },
+  "details": [
+    {
+      "question": "减震器结构设计要点是什么",
+      "error": "Timeout connecting to server"
+    },
+    {
+      "question": "驱动轮与地面的作用力公式",
+      "error": "Timeout connecting to server"
+    },
+    {
+      "question": "弹簧预压力的作用是什么",
+      "error": "Timeout connecting to server"
+    },
+    {
+      "question": "Flex调试前需要准备什么",
+      "error": "Timeout connecting to server"
+    }
+  ]
+}

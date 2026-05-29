@@ -394,6 +394,15 @@ class HybridRetriever:
         self.doc_meta = {}
         self.graph_builder = None
         self.chunks_data_path = os.path.join(Config.INDEX_DIR, "chunks_data.pkl")
+        # 缓存：减少重复计算
+        self._embed_cache: dict[str, list[float]] = {}
+        self._graph_cache: dict[str, list[int]] = {}
+        self._query_cache: dict[str, tuple[list[str], list[int]]] = {}
+        self._multi_query_cache: dict[str, list[str]] = {}
+        self._embed_cache_max = 128
+        self._graph_cache_max = 64
+        self._query_cache_max = 32
+        self._multi_query_cache_max = 64
 
         self.intent_classifier = IntentClassifier()
         self._load_doc_meta()
@@ -741,25 +750,47 @@ class HybridRetriever:
     def _bm25_scores(self, query: str) -> list:
         if not self.bm25 or not self.chunks:
             return []
-        tokenized_q = list(jieba.cut(query))
-        # TF-IDF 关键词加权：提取重要关键词重复追加，提升 BM25 召回精度
-        try:
-            keywords = jieba.analyse.extract_tags(query, topK=5, withWeight=False)
-            tokenized_q.extend(keywords)
-        except Exception:
-            pass
+        tokenized_q = list(jieba.cut_for_search(query))
         scores = self.bm25.get_scores(tokenized_q)
         return scores.tolist() if hasattr(scores, "tolist") else scores
 
     def _retrieve_from_graph(self, query: str, top_k: int = 3) -> list:
+        """图谱检索：先快速字符串匹配，未命中再走 LLM 实体提取"""
         if not self._init_success or self.graph_builder is None:
             return []
         try:
+            # 快速路径：查询中是否包含已知实体名（无 LLM 调用）
+            fast = self._graph_fast_match(query, top_k)
+            if fast:
+                return fast
+            # 回退：LLM 实体提取 + 多跳图遍历
             indices = self.graph_builder.retrieve_by_entities_with_hops(query, hops=Config.GRAPH_HOPS, top_k=top_k)
             return [i for i in indices if i < len(self.chunks)]
         except Exception as e:
             logger.error(f"图谱检索失败: {e}")
             return []
+
+    def _graph_fast_match(self, query: str, top_k: int = 3) -> list:
+        """字符串匹配查询中的已知实体，无 LLM 调用，极快"""
+        if not self.graph_builder or not hasattr(self.graph_builder, "entity_to_chunks"):
+            return []
+        entity_chunks = self.graph_builder.entity_to_chunks
+        if not entity_chunks:
+            return []
+        # 在查询中匹配已知实体名（子串包含）
+        matched = set()
+        query_lower = query.lower()
+        for entity in entity_chunks:
+            if len(entity) >= 2 and entity.lower() in query_lower:
+                matched.add(entity)
+        if not matched:
+            return []
+        chunk_scores: dict[int, int] = {}
+        for ent in matched:
+            for idx in entity_chunks.get(ent, []):
+                chunk_scores[idx] = chunk_scores.get(idx, 0) + 1
+        sorted_idx = sorted(chunk_scores.items(), key=lambda x: x[1], reverse=True)[:top_k]
+        return [idx for idx, _ in sorted_idx if idx < len(self.chunks)]
 
     def load_documents(self, file_paths, progress_callback=None, incremental=True):
         if not self._init_success:
@@ -962,8 +993,15 @@ class HybridRetriever:
         try:
             from core.query_optimizer import QueryOptimizer
 
-            qo = QueryOptimizer()
-            queries = qo.generate_multi_queries(query, num_queries=3)
+            # 多查询缓存：避免重复 LLM 调用
+            if query in self._multi_query_cache:
+                queries = self._multi_query_cache[query]
+            else:
+                qo = QueryOptimizer()
+                queries = qo.generate_multi_queries(query, num_queries=3)
+                if len(self._multi_query_cache) >= self._multi_query_cache_max:
+                    self._multi_query_cache.pop(next(iter(self._multi_query_cache)))
+                self._multi_query_cache[query] = queries
             if not queries or len(queries) == 1:
                 # 退化到基础检索
                 texts, indices, _ = self._ensemble_search(query, top_k)
@@ -996,6 +1034,12 @@ class HybridRetriever:
         if not self._init_success:
             logger.warning("检索器未初始化成功，无法检索")
             return [], []
+
+        # 查询缓存：完全相同的查询直接返回缓存结果
+        cache_key = f"{query}|{top_k}"
+        if cache_key in self._query_cache:
+            logger.debug(f"Query cache hit: {query[:50]}")
+            return self._query_cache[cache_key]
 
         # 动态计算 alpha（如果启用）
         if getattr(Config, "DYNAMIC_ALPHA", False):
@@ -1044,6 +1088,12 @@ class HybridRetriever:
         elapsed = (time.perf_counter() - start_time) * 1000
         logger.info(f"多路融合检索完成，耗时 {elapsed:.2f} ms，返回 {len(final_texts)} 个结果")
         record_retrieval(mode="final", doc_count=len(final_texts))
+
+        # 存入查询缓存 (LRU淘汰)
+        if len(self._query_cache) >= self._query_cache_max:
+            self._query_cache.pop(next(iter(self._query_cache)))
+        self._query_cache[cache_key] = (final_texts, final_indices)
+
         return final_texts, final_indices
 
     def get_chunk_images(self, indices):
@@ -1109,30 +1159,34 @@ class HybridRetriever:
         多路召回融合：向量 + BM25 + 图谱 + 多模态
         返回 (texts, indices, metadatas)
         """
-        with ThreadPoolExecutor(max_workers=4) as executor:
-            future_vector = executor.submit(self.vector_store.similarity_search_with_score, query, k=top_k * 2)
-            future_bm25 = executor.submit(self._bm25_scores, query)
-            future_graph = executor.submit(self._retrieve_from_graph, query, top_k)
-            # 只有多模态可用时才提交任务
-            if _get_config("enable_multimodal") and self._init_success and self._multimodal_available:
-                future_multimodal = executor.submit(self.multimodal_search, query, Config.MULTIMODAL_TOP_K)
-            else:
-                future_multimodal = None
+        # 缓存：向量搜索结果 + 图谱结果（避免重复 Ollama 调用）
+        vec_cache_key = query
+        if vec_cache_key in self._embed_cache:
+            vector_res = self._embed_cache[vec_cache_key]
+        else:
+            vector_res = self.vector_store.similarity_search_with_score(query, k=top_k * 2)
+            if len(self._embed_cache) >= self._embed_cache_max:
+                self._embed_cache.pop(next(iter(self._embed_cache)))
+            self._embed_cache[vec_cache_key] = vector_res
 
+        if query in self._graph_cache:
+            graph_indices = self._graph_cache[query]
+        else:
+            graph_indices = self._retrieve_from_graph(query, top_k)
+            if len(self._graph_cache) >= self._graph_cache_max:
+                self._graph_cache.pop(next(iter(self._graph_cache)))
+            self._graph_cache[query] = graph_indices
+
+        # BM25 (向量和图谱已缓存或执行完毕)
+        bm25_scores = self._bm25_scores(query) or []
+
+        multimodal_docs = []
+        multimodal_scores = []
+        if _get_config("enable_multimodal") and self._init_success and self._multimodal_available:
             try:
-                vector_res = future_vector.result()
+                multimodal_docs, multimodal_scores = self.multimodal_search(query, Config.MULTIMODAL_TOP_K)
             except Exception as e:
-                logger.error(f"向量检索失败: {e}")
-                vector_res = []
-            bm25_scores = future_bm25.result() or []
-            graph_indices = future_graph.result()
-            multimodal_docs = []
-            multimodal_scores = []
-            if future_multimodal:
-                try:
-                    multimodal_docs, multimodal_scores = future_multimodal.result()
-                except Exception as e:
-                    logger.error(f"多模态检索失败: {e}")
+                logger.error(f"多模态检索失败: {e}")
 
         candidates = {}
 

@@ -118,7 +118,7 @@ if BaseSettings is not object:
         enable_query_rewrite: bool = True
         enable_hyde: bool = True
         hyde_top_k: int = 5
-        enable_multi_query: bool = True
+        enable_multi_query: bool = False
         enable_synonym_expansion: bool = True
 
         # ── 数据库 ──
@@ -271,7 +271,7 @@ else:
             self.enable_query_rewrite = True
             self.enable_hyde = True
             self.hyde_top_k = 5
-            self.enable_multi_query = True
+            self.enable_multi_query = False
             self.enable_synonym_expansion = True
             self.database_url = os.getenv(
                 "DATABASE_URL", "postgresql+psycopg://postgres:postgres@localhost:5432/postgres"

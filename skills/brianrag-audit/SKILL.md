@@ -42,7 +42,10 @@ description: "BrianRAG 代码审计 — 全面检查 bugs、性能、安全、�
 
 ### 5. 前端问题
 - [ ] DOM 查询是否有 null 检查
+- [ ] innerHTML 用户数据是否经过 `esc()` 转义（XSS）
+- [ ] onclick 属性中的动态值是否转义
 - [ ] fetch 请求是否有错误处理
+- [ ] `catch(e){}` 是否有日志（禁止静默）
 - [ ] 事件监听是否正确清理
 - [ ] 快速点击是否有防抖
 - [ ] SSE 流断开是否正确恢复
@@ -72,6 +75,12 @@ grep -rn "f\".*DROP\|f\".*SELECT\|f\".*INSERT\|f\".*DELETE" --include="*.py" . -
 
 # print 残留
 grep -rn "^[^#]*\bprint(" --include="*.py" . --exclude-dir=.venv
+
+# innerHTML XSS (前端)
+grep -rn "innerHTML" --include="*.html" --include="*.js" . --exclude-dir=.venv --exclude-dir=lib
+
+# 静默 catch(e){} (前端)
+grep -rn "catch\s*(e)\s*{\s*}" --include="*.js" . --exclude-dir=lib
 ```
 
 ## 审计报告格式

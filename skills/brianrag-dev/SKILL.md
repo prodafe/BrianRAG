@@ -12,13 +12,13 @@ description: "BrianRAG 开发助手 — 当编写/修改 BrianRAG 代码、新�
 ## 一、项目架构约定
 
 ```
-core/       — 核心引擎（检索、生成、图谱、Agent、Memory）
-api/        — FastAPI 端点（main.py 唯一入口）
-utils/      — 工具模块（文档加载、OCR、认证、会话、数据连接器）
+core/       — 核心引擎（检索、生成、图谱、Agent[agent_loop+multi_agent]、Memory）
+api/        — FastAPI 端点（main.py 唯一入口，lifespan context manager）
+utils/      — 工具模块（document_loader、deep_doc_parser、OCR、认证、会话）
 tests/      — 测试（pytest，文件名 test_<模块>.py）
 frontend/   — 前端（index.html + admin.html + js/ + styles/）
 docs/       — 文档（API.md、GUIDE.md、DEPLOY.md、README_EN.md）
-evaluation/ — 评估（benchmark.py、ragas_runner.py）
+skills/     — Claude Code Skills（brianrag-dev/audit/bench）
 ```
 
 ## 二、代码规范
@@ -32,6 +32,10 @@ evaluation/ — 评估（benchmark.py、ragas_runner.py）
 ### 核心模块
 - RAG Pipeline 统一入口: `core/rag_pipeline.py` → `RAGPipeline`
 - 检索器: `core/retriever.py` → `HybridRetriever`
+- ReAct Agent: `core/agent_loop.py` → `ReActAgent` + `AgentMemory`
+- 多 Agent: `core/multi_agent.py` → `MultiAgentOrchestrator` (Planner/Retriever/Critic/ReAct)
+- 工具系统: `core/tools.py` → 12 tools + `@register` 装饰器
+- 工作流引擎: `core/workflow_engine.py` → `WorkflowEngine`
 - LLM Provider: `core/llm_provider.py` → `get_llm_provider()`
 - Redis: `core/redis_client.py` → `get_redis(db=N)`
 - Memory: `core/memory.py` → `get_user_memory(user_id)`
